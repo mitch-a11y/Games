@@ -1,6 +1,9 @@
 /* ============================================
-   HANSE - Trading System
+   HANSE - Enhanced Trading System
+   Phase 2: Price history, trends, analytics
    ============================================ */
+
+const PRICE_HISTORY_LENGTH = 30; // keep 30 data points
 
 const Trading = {
     // Initialize city markets
@@ -13,16 +16,20 @@ const Trading = {
             const production = city.production[goodId] || 0;
             const demand = city.demand[goodId] || 0;
 
-            // Stock based on production
             let stock = production * 20 + Utils.randInt(5, 30);
 
-            // Price based on supply/demand balance
             let priceMod = 1.0;
             if (production > 0) priceMod -= production * 0.08;
             if (demand > 0) priceMod += demand * 0.06;
             priceMod += Utils.rand(-0.1, 0.1);
 
             const price = Math.round(good.basePrice * Utils.clamp(priceMod, 0.4, 2.5));
+
+            // Initialize with price history
+            const history = [];
+            for (let i = 0; i < PRICE_HISTORY_LENGTH; i++) {
+                history.push(price + Utils.randInt(-3, 3));
+            }
 
             market[goodId] = {
                 stock: stock,
@@ -31,7 +38,13 @@ const Trading = {
                 lastPrice: price,
                 demand: demand,
                 production: production,
-                trend: 0 // -1 falling, 0 stable, 1 rising
+                trend: 0,
+                priceHistory: history,
+                avgPrice: price,
+                minPrice: price,
+                maxPrice: price,
+                totalBought: 0,
+                totalSold: 0
             };
         });
 
@@ -51,7 +64,7 @@ const Trading = {
                 m.stock += m.production * CONFIG.PRODUCTION_RATE;
             }
 
-            // Add production from player buildings
+            // Player building production
             if (cityState.playerBuildings) {
                 cityState.playerBuildings.forEach(b => {
                     if (b.produces === goodId) {
@@ -69,17 +82,14 @@ const Trading = {
             let priceFactor = 1.0;
 
             if (supplyRatio < 0.3) {
-                priceFactor = 1.5 + (0.3 - supplyRatio) * 3; // scarce = expensive
+                priceFactor = 1.5 + (0.3 - supplyRatio) * 3;
             } else if (supplyRatio > 2.0) {
-                priceFactor = 0.5 - (supplyRatio - 2.0) * 0.1; // oversupply = cheap
+                priceFactor = 0.5 - (supplyRatio - 2.0) * 0.1;
             } else {
                 priceFactor = 1.3 - supplyRatio * 0.4;
             }
 
-            // Random fluctuation
             priceFactor += Utils.rand(-CONFIG.PRICE_VOLATILITY, CONFIG.PRICE_VOLATILITY);
-
-            // Difficulty modifier
             priceFactor *= (difficultyMod || 1.0);
 
             const newPrice = Math.round(good.basePrice * Utils.clamp(priceFactor, 0.3, 3.5));
@@ -90,6 +100,17 @@ const Trading = {
             if (newPrice > m.lastPrice + 1) m.trend = 1;
             else if (newPrice < m.lastPrice - 1) m.trend = -1;
             else m.trend = 0;
+
+            // Update price history
+            m.priceHistory.push(newPrice);
+            if (m.priceHistory.length > PRICE_HISTORY_LENGTH) {
+                m.priceHistory.shift();
+            }
+
+            // Compute statistics
+            m.avgPrice = Math.round(m.priceHistory.reduce((a, b) => a + b, 0) / m.priceHistory.length);
+            m.minPrice = Math.min(...m.priceHistory);
+            m.maxPrice = Math.max(...m.priceHistory);
         });
     },
 
@@ -109,10 +130,11 @@ const Trading = {
         const cost = actual * market.price;
         player.gold -= cost;
         market.stock -= actual;
+        market.totalBought += actual;
         addCargo(ship, goodId, actual);
 
-        // Price rises after purchase
         market.stock = Math.max(0, market.stock);
+        player.totalTraded += cost;
 
         return {
             success: true,
@@ -136,7 +158,9 @@ const Trading = {
         const revenue = actual * market.price;
         player.gold += revenue;
         market.stock += actual;
+        market.totalSold += actual;
         removeCargo(ship, goodId, actual);
+        player.totalTraded += revenue;
 
         return {
             success: true,
@@ -170,5 +194,80 @@ const Trading = {
         }));
 
         return trades.sort((a, b) => b.profitPercent - a.profitPercent);
+    },
+
+    // Draw price history mini-chart (canvas-based for inline use)
+    renderPriceChart(history, width, height, currentPrice, basePrice) {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.display = 'block';
+        canvas.style.borderRadius = '3px';
+        const ctx = canvas.getContext('2d');
+
+        if (!history || history.length < 2) return canvas;
+
+        const min = Math.min(...history) * 0.9;
+        const max = Math.max(...history) * 1.1;
+        const range = max - min || 1;
+        const stepX = width / (history.length - 1);
+
+        // Background
+        ctx.fillStyle = 'rgba(10, 20, 40, 0.6)';
+        ctx.fillRect(0, 0, width, height);
+
+        // Base price line
+        const baseY = height - ((basePrice - min) / range) * height;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(0, baseY);
+        ctx.lineTo(width, baseY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Gradient fill under line
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        if (currentPrice >= basePrice) {
+            gradient.addColorStop(0, 'rgba(39, 174, 96, 0.3)');
+            gradient.addColorStop(1, 'rgba(39, 174, 96, 0.0)');
+        } else {
+            gradient.addColorStop(0, 'rgba(192, 57, 43, 0.3)');
+            gradient.addColorStop(1, 'rgba(192, 57, 43, 0.0)');
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        for (let i = 0; i < history.length; i++) {
+            const x = i * stepX;
+            const y = height - ((history[i] - min) / range) * height;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(width, height);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Price line
+        ctx.beginPath();
+        for (let i = 0; i < history.length; i++) {
+            const x = i * stepX;
+            const y = height - ((history[i] - min) / range) * height;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = currentPrice >= basePrice ? '#27ae60' : '#c0392b';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Current price dot
+        const lastX = (history.length - 1) * stepX;
+        const lastY = height - ((history[history.length - 1] - min) / range) * height;
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+
+        return canvas;
     }
 };

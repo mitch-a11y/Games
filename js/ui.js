@@ -1,11 +1,14 @@
 /* ============================================
-   HANSE - UI Manager
+   HANSE - Enhanced UI Manager
+   Phase 2: Price charts, better trade UI, sliders
    ============================================ */
 
 const UI = {
     currentTab: 'city',
     selectedShipId: null,
+    selectedTradeShipIdx: 0,
     notifications: [],
+    tradeQuantities: {}, // store qty per good for trade tab
 
     init() {
         // Tab switching
@@ -56,7 +59,7 @@ const UI = {
         }
     },
 
-    // Update top bar info
+    // Update top bar
     updateTopBar(gameState) {
         document.getElementById('player-display').textContent = gameState.player.name;
         document.getElementById('rank-display').textContent = gameState.player.rank;
@@ -66,7 +69,7 @@ const UI = {
         document.getElementById('gold-display').textContent = Utils.formatGold(gameState.player.gold);
     },
 
-    // City tab
+    // === CITY TAB ===
     onCitySelected(cityId) {
         GameMap.selectedCity = cityId;
         this.switchTab('city');
@@ -77,7 +80,7 @@ const UI = {
         const cityId = GameMap.selectedCity;
         if (!cityId || !Game.state) {
             document.getElementById('city-name').textContent = 'Keine Stadt ausgewaehlt';
-            document.getElementById('city-details').innerHTML = '<p style="color: var(--text-dim)">Klicke auf eine Stadt in der Karte.</p>';
+            document.getElementById('city-details').innerHTML = '<p style="color:var(--text-dim)">Klicke auf eine Stadt in der Karte.</p>';
             return;
         }
 
@@ -90,17 +93,17 @@ const UI = {
 
         // Basic info
         html += this.detailRow('Einwohner', Utils.formatNumber(cityState.population));
-        html += this.detailRow('Bedeutung', '★'.repeat(city.importance) + '☆'.repeat(5 - city.importance));
-        html += this.detailRow('Werft', city.hasShipyard ? 'Ja' : 'Nein');
+        html += this.detailRow('Bedeutung', '<span style="color:#ffd700">' + '\u2605'.repeat(city.importance) + '</span>' + '\u2606'.repeat(5 - city.importance));
+        html += this.detailRow('Werft', city.hasShipyard ? '<span style="color:var(--success)">Ja</span>' : 'Nein');
 
         // Player buildings
         if (cityState.playerBuildings && cityState.playerBuildings.length > 0) {
-            html += this.detailRow('Eure Gebaeude', cityState.playerBuildings.length);
+            html += this.detailRow('Eure Gebaeude', cityState.playerBuildings.map(b => BUILDING_TYPES[b.type].icon).join(' '));
         }
 
         // Reputation
         const rep = cityState.reputation || 0;
-        html += this.detailRow('Ansehen', rep > 0 ? `+${rep}` : rep);
+        html += this.detailRow('Ansehen', rep > 0 ? `<span style="color:var(--success)">+${rep}</span>` : `${rep}`);
 
         // Ships docked here
         const dockedShips = Game.state.player.ships.filter(s => s.location === cityId);
@@ -108,19 +111,27 @@ const UI = {
             html += this.detailRow('Eure Schiffe', dockedShips.map(s => s.name).join(', '));
         }
 
-        // Market overview
+        // Net worth
+        const netWorth = Game.calculateNetWorth();
+        html += this.detailRow('Vermoegen', `<span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span>`);
+
+        // Market overview with mini charts
         html += '<div class="city-goods-section"><h4>Marktpreise</h4>';
         GOOD_IDS.forEach(goodId => {
             const m = cityState.market[goodId];
             const good = GOODS[goodId];
             const trendClass = m.trend > 0 ? 'trend-up' : (m.trend < 0 ? 'trend-down' : 'trend-stable');
-            const trendIcon = m.trend > 0 ? '▲' : (m.trend < 0 ? '▼' : '─');
+            const trendIcon = m.trend > 0 ? '\u25B2' : (m.trend < 0 ? '\u25BC' : '\u2500');
 
-            html += `<div class="city-good-row">
+            // Price vs base comparison
+            const vsBase = m.price - good.basePrice;
+            const vsColor = vsBase > 5 ? 'var(--danger)' : (vsBase < -5 ? 'var(--success)' : 'var(--text-dim)');
+
+            html += `<div class="city-good-row" onclick="UI.showPriceDetail('${cityId}','${goodId}')" style="cursor:pointer" title="Klicken fuer Preishistorie">
                 <span class="city-good-name">${good.icon} ${good.name}</span>
-                <span class="city-good-stock">${Math.floor(m.stock)}</span>
+                <span class="city-good-stock" title="Vorrat">${Math.floor(m.stock)}</span>
                 <span class="city-good-price">${m.price} G</span>
-                <span class="city-good-trend ${trendClass}">${trendIcon}</span>
+                <span class="city-good-trend ${trendClass}" title="${vsBase > 0 ? '+' : ''}${vsBase} vs. Basis">${trendIcon}</span>
             </div>`;
         });
         html += '</div>';
@@ -132,51 +143,151 @@ const UI = {
         return `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${value}</span></div>`;
     },
 
-    // Trade tab
+    // Show price detail popup with chart
+    showPriceDetail(cityId, goodId) {
+        const cityState = Game.state.cities[cityId];
+        const m = cityState.market[goodId];
+        const good = GOODS[goodId];
+
+        const chartCanvas = Trading.renderPriceChart(
+            m.priceHistory || [], 320, 120, m.price, good.basePrice
+        );
+
+        let html = `<div class="event-popup">
+            <h3>${good.icon} ${good.name} in ${CITIES_DATA[cityId].displayName}</h3>
+            <div style="display:flex;justify-content:space-around;margin:12px 0;font-size:13px">
+                <div style="text-align:center">
+                    <div style="color:var(--text-dim)">Aktuell</div>
+                    <div style="font-size:18px;font-weight:bold;color:var(--gold-color)">${m.price} G</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="color:var(--text-dim)">Durchschnitt</div>
+                    <div style="font-size:18px;font-weight:bold">${m.avgPrice || m.price} G</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="color:var(--text-dim)">Spanne</div>
+                    <div style="font-size:14px">${m.minPrice || m.price} - ${m.maxPrice || m.price} G</div>
+                </div>
+            </div>
+            <div id="price-chart-container" style="display:flex;justify-content:center;margin:8px 0"></div>
+            <div style="display:flex;justify-content:space-around;margin:8px 0;font-size:12px;color:var(--text-dim)">
+                <div>Vorrat: ${Math.floor(m.stock)}</div>
+                <div>Nachfrage: ${'\u2588'.repeat(m.demand) || '\u2500'}</div>
+                <div>Produktion: ${'\u2588'.repeat(m.production) || '\u2500'}</div>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);text-align:center;margin:4px 0">${good.description}</div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="UI.hideModal()">Schliessen</button>
+            </div>
+        </div>`;
+
+        this.showModal(html);
+
+        // Inject the canvas chart
+        const container = document.getElementById('price-chart-container');
+        if (container) {
+            container.appendChild(chartCanvas);
+        }
+    },
+
+    // === TRADE TAB ===
     updateTradeTab() {
         const cityId = GameMap.selectedCity;
         const panel = document.getElementById('trade-goods-list');
 
         if (!cityId || !Game.state) {
-            panel.innerHTML = '<p style="color: var(--text-dim)">Waehle eine Stadt zum Handeln.</p>';
+            panel.innerHTML = '<p style="color:var(--text-dim)">Waehle eine Stadt zum Handeln.</p>';
             return;
         }
 
-        // Find player ships docked at this city
         const dockedShips = Game.state.player.ships.filter(s => s.location === cityId && s.status === 'docked');
 
         if (dockedShips.length === 0) {
-            panel.innerHTML = '<p style="color: var(--text-dim)">Kein Schiff in dieser Stadt zum Handeln.</p>';
+            panel.innerHTML = '<p style="color:var(--text-dim)">Kein Schiff in dieser Stadt. Sendet ein Schiff hierher oder kauft eines in der Werft.</p>';
             return;
         }
 
-        const ship = dockedShips[0]; // Use first docked ship
+        // Ship selector if multiple ships
+        if (this.selectedTradeShipIdx >= dockedShips.length) this.selectedTradeShipIdx = 0;
+        const ship = dockedShips[this.selectedTradeShipIdx];
         const cityState = Game.state.cities[cityId];
+        const cargoCount = getCargoCount(ship);
+        const cargoPercent = Math.round(cargoCount / ship.capacity * 100);
 
-        let html = `<div class="trade-summary">
-            <div class="trade-summary-row"><span>Schiff:</span><span>${ship.name}</span></div>
-            <div class="trade-summary-row"><span>Fracht:</span><span>${getCargoCount(ship)} / ${ship.capacity}</span></div>
+        let html = '';
+
+        // Ship selector
+        if (dockedShips.length > 1) {
+            html += '<div style="display:flex;gap:4px;margin-bottom:8px">';
+            dockedShips.forEach((s, i) => {
+                const active = i === this.selectedTradeShipIdx;
+                html += `<button onclick="UI.selectedTradeShipIdx=${i};UI.updateTradeTab()"
+                    style="flex:1;padding:4px 6px;font-size:11px;border-radius:3px;cursor:pointer;
+                    background:${active ? 'var(--accent-dark)' : 'var(--bg-medium)'};
+                    color:${active ? '#fff' : 'var(--text-dim)'};
+                    border:1px solid ${active ? 'var(--accent)' : 'var(--border)'}">${s.name}</button>`;
+            });
+            html += '</div>';
+        }
+
+        // Ship summary with cargo bar
+        html += `<div class="trade-summary">
+            <div class="trade-summary-row"><span>Schiff:</span><span>${ship.name} (${SHIP_TYPES[ship.typeId].name})</span></div>
+            <div class="trade-summary-row"><span>Fracht:</span><span>${cargoCount} / ${ship.capacity}</span></div>
+            <div class="ship-cargo-bar" style="margin:4px 0"><div class="ship-cargo-fill" style="width:${cargoPercent}%"></div></div>
             <div class="trade-summary-row"><span>Gold:</span><span style="color:var(--gold-color)">${Utils.formatGold(Game.state.player.gold)}</span></div>
         </div>`;
 
+        // Goods list
         GOOD_IDS.forEach(goodId => {
             const m = cityState.market[goodId];
             const good = GOODS[goodId];
             const inCargo = ship.cargo[goodId] || 0;
+            const maxBuy = Math.min(
+                Math.floor(Game.state.player.gold / m.price),
+                Math.floor(m.stock),
+                getRemainingCapacity(ship)
+            );
+            const trendIcon = m.trend > 0 ? '<span style="color:var(--danger)">\u25B2</span>' : (m.trend < 0 ? '<span style="color:var(--success)">\u25BC</span>' : '<span style="color:var(--text-dim)">\u2500</span>');
+
+            // Price color: green if below base (good buy), red if above (good sell)
+            const priceColor = m.price < good.basePrice * 0.85 ? 'var(--success)' : (m.price > good.basePrice * 1.15 ? 'var(--danger)' : 'var(--text-light)');
 
             html += `<div class="trade-row">
-                <div class="trade-good-info">
-                    <div class="trade-good-name">${good.icon} ${good.name}</div>
-                    <div class="trade-good-detail">Preis: ${m.price} G | Vorrat: ${Math.floor(m.stock)} | Im Schiff: ${inCargo}</div>
+                <div class="trade-good-info" style="min-width:0">
+                    <div class="trade-good-name">${good.icon} ${good.name} ${trendIcon}</div>
+                    <div class="trade-good-detail">
+                        <span style="color:${priceColor};font-weight:bold">${m.price} G</span>
+                        <span style="color:var(--text-dim)">| Vorrat: ${Math.floor(m.stock)}</span>
+                        ${inCargo > 0 ? `<span style="color:var(--accent)">| Fracht: ${inCargo}</span>` : ''}
+                    </div>
                 </div>
                 <div class="trade-actions">
-                    <button class="trade-btn buy" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',5)" ${Game.state.player.gold < m.price || m.stock < 1 || getRemainingCapacity(ship) <= 0 ? 'disabled' : ''}>+5</button>
-                    <button class="trade-btn-max" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',999)" ${Game.state.player.gold < m.price || m.stock < 1 || getRemainingCapacity(ship) <= 0 ? 'disabled' : ''}>Max</button>
-                    <button class="trade-btn sell" onclick="UI.executeTrade('sell','${goodId}','${ship.id}','${cityId}',5)" ${inCargo <= 0 ? 'disabled' : ''}>-5</button>
-                    <button class="trade-btn-max" onclick="UI.executeTrade('sell','${goodId}','${ship.id}','${cityId}',999)" ${inCargo <= 0 ? 'disabled' : ''}>Alle</button>
+                    <button class="trade-btn buy" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',1)"
+                        ${maxBuy <= 0 ? 'disabled' : ''} title="1 kaufen">+1</button>
+                    <button class="trade-btn buy" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',5)"
+                        ${maxBuy <= 0 ? 'disabled' : ''} title="5 kaufen">+5</button>
+                    <button class="trade-btn buy" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',25)"
+                        ${maxBuy <= 0 ? 'disabled' : ''} title="25 kaufen">+25</button>
+                    <button class="trade-btn-max" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',9999)"
+                        ${maxBuy <= 0 ? 'disabled' : ''} title="Maximum kaufen">Max</button>
+                    <span style="width:6px"></span>
+                    <button class="trade-btn sell" onclick="UI.executeTrade('sell','${goodId}','${ship.id}','${cityId}',1)"
+                        ${inCargo <= 0 ? 'disabled' : ''} title="1 verkaufen">-1</button>
+                    <button class="trade-btn sell" onclick="UI.executeTrade('sell','${goodId}','${ship.id}','${cityId}',5)"
+                        ${inCargo <= 0 ? 'disabled' : ''} title="5 verkaufen">-5</button>
+                    <button class="trade-btn-max" onclick="UI.executeTrade('sell','${goodId}','${ship.id}','${cityId}',9999)"
+                        ${inCargo <= 0 ? 'disabled' : ''} title="Alle verkaufen">Alle</button>
                 </div>
             </div>`;
         });
+
+        // Quick actions
+        html += `<div style="display:flex;gap:6px;margin-top:10px">
+            <button class="trade-btn-max" style="flex:1;padding:6px" onclick="UI.sellAllCargo('${ship.id}','${cityId}')"
+                ${cargoCount <= 0 ? 'disabled' : ''}>Alles verkaufen</button>
+            <button class="trade-btn-max" style="flex:1;padding:6px" onclick="UI.autoBuyBest('${ship.id}','${cityId}')">Beste Waren laden</button>
+        </div>`;
 
         panel.innerHTML = html;
     },
@@ -204,7 +315,89 @@ const UI = {
         this.updateTopBar(Game.state);
     },
 
-    // Fleet tab
+    sellAllCargo(shipId, cityId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        let totalRevenue = 0;
+        let soldCount = 0;
+        const goodsSold = [];
+
+        GOOD_IDS.forEach(goodId => {
+            const inCargo = ship.cargo[goodId] || 0;
+            if (inCargo > 0) {
+                const result = Trading.sell(Game.state, cityId, goodId, inCargo, ship);
+                if (result.success) {
+                    totalRevenue += result.revenue;
+                    soldCount += result.amount;
+                    goodsSold.push(`${result.amount} ${GOODS[goodId].name}`);
+                }
+            }
+        });
+
+        if (soldCount > 0) {
+            Sound.play('sell');
+            this.addLogMessage(`Alles verkauft: ${goodsSold.join(', ')} fuer ${Utils.formatGold(totalRevenue)}.`, 'trade');
+            this.showNotification(`${Utils.formatGold(totalRevenue)} eingenommen!`, 'success');
+        }
+
+        this.updateTradeTab();
+        this.updateTopBar(Game.state);
+    },
+
+    autoBuyBest(shipId, cityId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        // Find goods that are cheapest here (below average price)
+        const cityState = Game.state.cities[cityId];
+        const deals = GOOD_IDS.map(goodId => {
+            const m = cityState.market[goodId];
+            const good = GOODS[goodId];
+            return {
+                goodId,
+                price: m.price,
+                discount: (good.basePrice - m.price) / good.basePrice,
+                stock: m.stock
+            };
+        }).filter(d => d.discount > 0 && d.stock > 2)
+          .sort((a, b) => b.discount - a.discount);
+
+        let totalCost = 0;
+        let boughtCount = 0;
+
+        for (const deal of deals) {
+            const remaining = getRemainingCapacity(ship);
+            if (remaining <= 0) break;
+
+            const maxBuy = Math.min(
+                remaining,
+                Math.floor(Game.state.player.gold / deal.price),
+                Math.floor(deal.stock * 0.5)
+            );
+
+            if (maxBuy > 0) {
+                const result = Trading.buy(Game.state, cityId, deal.goodId, maxBuy, ship);
+                if (result.success) {
+                    totalCost += result.cost;
+                    boughtCount += result.amount;
+                }
+            }
+        }
+
+        if (boughtCount > 0) {
+            Sound.play('buy');
+            this.addLogMessage(`${boughtCount} Waren automatisch geladen fuer ${Utils.formatGold(totalCost)}.`, 'trade');
+            this.showNotification(`${boughtCount} Waren geladen!`, 'success');
+        } else {
+            this.showNotification('Keine guenstigen Waren verfuegbar.', 'warning');
+        }
+
+        this.updateTradeTab();
+        this.updateTopBar(Game.state);
+    },
+
+    // === FLEET TAB ===
     updateFleetTab() {
         const panel = document.getElementById('fleet-list');
         const player = Game.state ? Game.state.player : null;
@@ -213,23 +406,33 @@ const UI = {
         let html = '';
 
         if (player.ships.length === 0) {
-            html = '<p style="color: var(--text-dim)">Keine Schiffe. Kaufe eines in einer Stadt mit Werft!</p>';
+            html = '<p style="color:var(--text-dim)">Keine Schiffe. Kaufe eines in einer Stadt mit Werft!</p>';
         }
 
         player.ships.forEach(ship => {
             const type = SHIP_TYPES[ship.typeId];
-            const cargoPercent = (getCargoCount(ship) / ship.capacity * 100).toFixed(0);
-            const hullPercent = (ship.hull / ship.maxHull * 100).toFixed(0);
+            const cargoCount = getCargoCount(ship);
+            const cargoPercent = Math.round(cargoCount / ship.capacity * 100);
+            const hullPercent = Math.round(ship.hull / ship.maxHull * 100);
 
             let statusText = '';
             let statusClass = '';
             if (ship.status === 'docked') {
-                statusText = `Angedockt: ${CITIES_DATA[ship.location]?.displayName || ship.location}`;
+                statusText = `Angedockt: ${CITIES_DATA[ship.location] ? CITIES_DATA[ship.location].displayName : ship.location}`;
                 statusClass = 'docked';
             } else if (ship.status === 'sailing') {
                 const dest = ship.route ? ship.route[ship.route.length - 1] : ship.destination;
-                statusText = `Unterwegs: ${CITIES_DATA[dest]?.displayName || dest}`;
+                const destName = CITIES_DATA[dest] ? CITIES_DATA[dest].displayName : dest;
+                const progressPct = ship.route ? Math.round((ship.routeIndex + ship.progress) / (ship.route.length - 1) * 100) : 0;
+                statusText = `Unterwegs: ${destName} (${progressPct}%)`;
                 statusClass = 'sailing';
+            }
+
+            // Cargo summary
+            let cargoText = '';
+            const cargoEntries = Object.entries(ship.cargo).filter(([, v]) => v > 0);
+            if (cargoEntries.length > 0) {
+                cargoText = cargoEntries.map(([gid, amt]) => `${GOODS[gid].icon}${amt}`).join(' ');
             }
 
             html += `<div class="ship-card ${this.selectedShipId === ship.id ? 'selected' : ''}" onclick="UI.selectShip('${ship.id}')">
@@ -238,46 +441,59 @@ const UI = {
                     <span class="ship-card-type">${type.name}</span>
                 </div>
                 <div class="ship-card-stats">
-                    <div class="ship-stat"><span class="ship-stat-label">Rumpf:</span><span class="ship-stat-value">${hullPercent}%</span></div>
-                    <div class="ship-stat"><span class="ship-stat-label">Fracht:</span><span class="ship-stat-value">${getCargoCount(ship)}/${ship.capacity}</span></div>
+                    <div class="ship-stat"><span class="ship-stat-label">Rumpf:</span><span class="ship-stat-value" style="color:${hullPercent > 50 ? 'var(--text)' : (hullPercent > 25 ? 'var(--warning)' : 'var(--danger)')}">${hullPercent}%</span></div>
+                    <div class="ship-stat"><span class="ship-stat-label">Fracht:</span><span class="ship-stat-value">${cargoCount}/${ship.capacity}</span></div>
                     <div class="ship-stat"><span class="ship-stat-label">Geschw.:</span><span class="ship-stat-value">${ship.speed.toFixed(1)}</span></div>
                     <div class="ship-stat"><span class="ship-stat-label">Kanonen:</span><span class="ship-stat-value">${ship.cannons}</span></div>
                 </div>
                 <div class="ship-cargo-bar"><div class="ship-cargo-fill" style="width:${cargoPercent}%"></div></div>
+                ${cargoText ? `<div style="font-size:10px;margin-top:4px;color:var(--text-dim)">${cargoText}</div>` : ''}
                 <div class="ship-status ${statusClass}">${statusText}</div>
             </div>`;
 
-            // If selected and docked, show navigation options
+            // Navigation options for selected docked ship
             if (this.selectedShipId === ship.id && ship.status === 'docked') {
                 html += this.renderNavigationOptions(ship);
             }
         });
 
         panel.innerHTML = html;
-
-        // Shipyard
         this.updateShipyard();
     },
 
     renderNavigationOptions(ship) {
         const connected = getConnectedCities(ship.location);
         let html = '<div style="padding:8px;background:rgba(15,52,96,0.4);border-radius:4px;margin-bottom:8px">';
-        html += '<div style="font-size:12px;color:var(--accent);margin-bottom:6px">Ziel waehlen:</div>';
+        html += '<div style="font-size:12px;color:var(--accent);margin-bottom:6px;font-weight:bold">Ziel waehlen:</div>';
 
-        connected.forEach(destId => {
-            const city = CITIES_DATA[destId];
+        // Sort by distance
+        const destinations = connected.map(destId => {
             const route = findShortestPath(ship.location, destId);
-            const travelDays = route ? route.distance * 3 : '?';
+            return { destId, distance: route ? route.distance : 99, travelDays: route ? route.distance * 3 : '?' };
+        }).sort((a, b) => a.distance - b.distance);
 
-            html += `<button class="trade-btn buy" style="margin:2px;padding:4px 8px;font-size:11px"
-                onclick="UI.sailShip('${ship.id}','${destId}')">${city.displayName} (~${travelDays} Tage)</button>`;
+        destinations.forEach(dest => {
+            const city = CITIES_DATA[dest.destId];
+            html += `<button class="trade-btn buy" style="margin:2px;padding:4px 8px;font-size:11px;width:calc(50% - 4px)"
+                onclick="UI.sailShip('${ship.id}','${dest.destId}')">${city.displayName} <span style="color:var(--text-dim)">(~${dest.travelDays}d)</span></button>`;
         });
 
-        // Repair option if damaged
+        // Repair option
         if (ship.hull < ship.maxHull) {
             const repairCost = Math.ceil((ship.maxHull - ship.hull) * 10);
-            html += `<div style="margin-top:6px"><button class="trade-btn-max" onclick="UI.repairShip('${ship.id}')"
-                ${Game.state.player.gold < repairCost ? 'disabled' : ''}>Reparieren (${repairCost} Gold)</button></div>`;
+            html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                <button class="build-buy-btn" style="width:100%" onclick="UI.repairShip('${ship.id}')"
+                ${Game.state.player.gold < repairCost ? 'disabled' : ''}>Reparieren - ${Utils.formatGold(repairCost)}</button>
+            </div>`;
+        }
+
+        // Sell ship option
+        const sellPrice = Math.floor(SHIP_TYPES[ship.typeId].cost * 0.4);
+        if (Game.state.player.ships.length > 1) {
+            html += `<div style="margin-top:4px">
+                <button class="trade-btn sell" style="width:100%;padding:4px" onclick="UI.sellShip('${ship.id}')"
+                    title="Schiff verkaufen">Verkaufen (${Utils.formatGold(sellPrice)})</button>
+            </div>`;
         }
 
         html += '</div>';
@@ -333,6 +549,40 @@ const UI = {
         this.updateTopBar(Game.state);
     },
 
+    sellShip(shipId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship || Game.state.player.ships.length <= 1) return;
+
+        const sellPrice = Math.floor(SHIP_TYPES[ship.typeId].cost * 0.4);
+
+        this.showModal(`<div class="event-popup">
+            <h3>Schiff verkaufen?</h3>
+            <div class="event-text">"${ship.name}" (${SHIP_TYPES[ship.typeId].name}) fuer ${Utils.formatGold(sellPrice)} verkaufen?<br>
+            ${getCargoCount(ship) > 0 ? '<span style="color:var(--warning)">Achtung: Fracht geht verloren!</span>' : ''}</div>
+            <div class="modal-buttons">
+                <button class="modal-btn danger" onclick="UI.confirmSellShip('${shipId}')">Verkaufen</button>
+                <button class="modal-btn secondary" onclick="UI.hideModal()">Abbrechen</button>
+            </div>
+        </div>`);
+    },
+
+    confirmSellShip(shipId) {
+        const idx = Game.state.player.ships.findIndex(s => s.id === shipId);
+        if (idx === -1) return;
+
+        const ship = Game.state.player.ships[idx];
+        const sellPrice = Math.floor(SHIP_TYPES[ship.typeId].cost * 0.4);
+        Game.state.player.gold += sellPrice;
+        Game.state.player.ships.splice(idx, 1);
+
+        Sound.play('sell');
+        this.addLogMessage(`${ship.name} fuer ${Utils.formatGold(sellPrice)} verkauft.`, 'trade');
+        this.hideModal();
+        this.selectedShipId = null;
+        this.updateFleetTab();
+        this.updateTopBar(Game.state);
+    },
+
     updateShipyard() {
         const section = document.getElementById('shipyard-section');
         const list = document.getElementById('shipyard-list');
@@ -345,7 +595,6 @@ const UI = {
 
         section.classList.remove('hidden');
 
-        // Check if player has a ship docked here (requirement for shipyard access)
         const hasPresence = Game.state.player.ships.some(s => s.location === cityId) ||
             (Game.state.cities[cityId].playerBuildings || []).some(b => b.type === 'kontor');
 
@@ -357,6 +606,7 @@ const UI = {
         let html = '';
         SHIP_TYPE_IDS.forEach(typeId => {
             const type = SHIP_TYPES[typeId];
+            const canAfford = Game.state.player.gold >= type.cost;
             html += `<div class="shipyard-item">
                 <div class="shipyard-item-header">
                     <span class="shipyard-item-name">${type.name}</span>
@@ -364,9 +614,10 @@ const UI = {
                 </div>
                 <div class="shipyard-item-stats">
                     Fracht: ${type.capacity} | Geschw: ${type.speed} | Rumpf: ${type.hull} | Kanonen: ${type.cannons}
+                    <br><span style="color:var(--text-dim)">${type.description}</span>
                 </div>
                 <button class="shipyard-buy-btn" onclick="UI.buyShip('${typeId}','${cityId}')"
-                    ${Game.state.player.gold < type.cost ? 'disabled' : ''}>Kaufen</button>
+                    ${canAfford ? '' : 'disabled'}>${canAfford ? 'Kaufen' : 'Zu teuer'}</button>
             </div>`;
         });
 
@@ -392,13 +643,13 @@ const UI = {
         this.updateTopBar(Game.state);
     },
 
-    // Build tab
+    // === BUILD TAB ===
     updateBuildTab() {
         const panel = document.getElementById('build-list');
         const cityId = GameMap.selectedCity;
 
         if (!cityId || !Game.state) {
-            panel.innerHTML = '<p style="color: var(--text-dim)">Waehle eine Stadt zum Bauen.</p>';
+            panel.innerHTML = '<p style="color:var(--text-dim)">Waehle eine Stadt zum Bauen.</p>';
             return;
         }
 
@@ -418,27 +669,31 @@ const UI = {
                         <span style="color:var(--text-dim);font-size:11px">Stufe ${b.level}</span>
                     </div>
                     <div class="build-item-desc">${type.effect}</div>
+                    <div style="font-size:10px;color:var(--text-dim)">Unterhalt: ${type.maintenance * b.level} G/Monat</div>
                 </div>`;
             });
             html += '<div style="height:12px"></div>';
         }
 
-        // Show available buildings
+        // Available buildings
         html += '<h4 style="color:var(--text-dim);font-size:11px;text-transform:uppercase;margin-bottom:6px">Verfuegbar</h4>';
 
-        if (available.length === 0) {
-            html += '<p style="color:var(--text-dim);font-size:12px">Keine weiteren Gebaeude verfuegbar.</p>';
+        if (available.length === 0 && (!cityState.playerBuildings || cityState.playerBuildings.length === 0)) {
+            html += '<p style="color:var(--text-dim);font-size:12px">Errichtet zuerst ein Handelskontor!</p>';
+        } else if (available.length === 0) {
+            html += '<p style="color:var(--text-dim);font-size:12px">Alle Gebaeude errichtet.</p>';
         }
 
         available.forEach(item => {
+            const canAfford = Game.state.player.gold >= item.cost;
             html += `<div class="build-item">
                 <div class="build-item-header">
                     <span class="build-item-name">${item.type.icon} ${item.isUpgrade ? 'Ausbau: ' : ''}${item.type.name}</span>
                     <span class="build-item-cost">${Utils.formatGold(item.cost)}</span>
                 </div>
-                <div class="build-item-desc">${item.type.description}</div>
+                <div class="build-item-desc">${item.type.description}<br><em style="color:var(--text-dim)">${item.type.effect}</em></div>
                 <button class="build-buy-btn" onclick="UI.buildBuilding('${cityId}','${item.typeId}')"
-                    ${Game.state.player.gold < item.cost ? 'disabled' : ''}>${item.isUpgrade ? 'Ausbauen' : 'Bauen'}</button>
+                    ${canAfford ? '' : 'disabled'}>${item.isUpgrade ? 'Ausbauen' : (canAfford ? 'Bauen' : 'Zu teuer')}</button>
             </div>`;
         });
 
@@ -458,16 +713,16 @@ const UI = {
         this.updateTopBar(Game.state);
     },
 
-    // Wind indicator
+    // === WIND ===
     updateWind(gameState) {
         const directions = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'];
-        const arrows = ['↓', '↙', '←', '↖', '↑', '↗', '→', '↘'];
+        const arrows = ['\u2193', '\u2199', '\u2190', '\u2196', '\u2191', '\u2197', '\u2192', '\u2198'];
         const idx = gameState.wind.direction;
         document.getElementById('wind-direction').textContent = arrows[idx];
         document.getElementById('wind-label').textContent = `${directions[idx]} ${gameState.wind.strength.toFixed(1)}`;
     },
 
-    // Message log
+    // === MESSAGE LOG ===
     addLogMessage(text, type) {
         const log = document.getElementById('message-log');
         const time = Game.state ? Utils.formatDateShort(Game.state.date.day, Game.state.date.month, Game.state.date.year) : '';
@@ -478,13 +733,12 @@ const UI = {
 
         log.insertBefore(entry, log.firstChild);
 
-        // Keep log manageable
         while (log.children.length > 100) {
             log.removeChild(log.lastChild);
         }
     },
 
-    // Notifications
+    // === NOTIFICATIONS ===
     showNotification(text, type) {
         const area = document.getElementById('notification-area');
         const notif = document.createElement('div');
@@ -498,7 +752,7 @@ const UI = {
         }, 3000);
     },
 
-    // Modal
+    // === MODAL ===
     showModal(html) {
         document.getElementById('modal-content').innerHTML = html;
         document.getElementById('modal-overlay').classList.remove('hidden');
@@ -508,7 +762,6 @@ const UI = {
         document.getElementById('modal-overlay').classList.add('hidden');
     },
 
-    // Event popup
     showEventPopup(event) {
         const html = `<div class="event-popup">
             <div class="event-icon">${event.template.icon}</div>
@@ -522,9 +775,19 @@ const UI = {
         Sound.play(event.template.type === 'combat' ? 'danger' : 'event');
     },
 
-    // Game menu
     showGameMenu() {
+        const netWorth = Game.calculateNetWorth();
+        const daysPlayed = Game.state.player.daysPlayed;
+        const shipsOwned = Game.state.player.ships.length;
+        const totalTraded = Game.state.player.totalTraded || 0;
+
         const html = `<h3>Spielmenue</h3>
+            <div style="font-size:12px;margin-bottom:16px;padding:10px;background:rgba(15,52,96,0.3);border-radius:4px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Vermoegen:</span><span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Handelsvolumen:</span><span>${Utils.formatGold(totalTraded)}</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Tage gespielt:</span><span>${daysPlayed}</span></div>
+                <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}</span></div>
+            </div>
             <div class="modal-buttons" style="flex-direction:column;gap:8px">
                 <button class="modal-btn primary" onclick="Game.save();UI.showNotification('Gespeichert!','success');UI.hideModal()">Spiel speichern</button>
                 <button class="modal-btn secondary" onclick="Sound.toggle();UI.hideModal();UI.showNotification(Sound.enabled?'Ton an':'Ton aus','info')">Ton ${Sound.enabled ? 'aus' : 'ein'}</button>
@@ -534,10 +797,9 @@ const UI = {
         this.showModal(html);
     },
 
-    // Rank up notification
     showRankUp(oldRank, newRank) {
         const html = `<div class="event-popup">
-            <div class="event-icon">🏅</div>
+            <div class="event-icon">\uD83C\uDFC5</div>
             <h3>Befoerderung!</h3>
             <div class="event-text">Ihr wurdet vom ${oldRank} zum <strong style="color:var(--accent)">${newRank}</strong> befoerdert!</div>
             <div class="modal-buttons">

@@ -660,3 +660,64 @@ html, body {
     color: var(--text-dim);
     margin-bottom: 2px;
 }
+
+/* === Phase 2 Enhancements === */
+
+/* Enhanced trade row */
+.trade-row {
+    flex-wrap: wrap;
+}
+.trade-actions {
+    flex-wrap: wrap;
+    gap: 2px;
+}
+.trade-btn {
+    min-width: 28px;
+    text-align: center;
+}
+
+/* Price chart container in modal */
+#price-chart-container canvas {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+/* Improved city good rows */
+.city-good-row {
+    transition: background 0.15s;
+}
+.city-good-row:hover {
+    background: rgba(15, 52, 96, 0.5);
+}
+
+/* Ship progress indicator */
+.ship-status.sailing {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Better modal responsiveness */
+@media (max-height: 700px) {
+    #modal-content {
+        max-height: 90vh;
+    }
+}
+
+/* Trade summary improvements */
+.trade-summary {
+    border: 1px solid var(--border);
+}
+
+/* Compact trade buttons on smaller screens */
+@media (max-width: 1100px) {
+    .trade-actions {
+        font-size: 10px;
+    }
+    .trade-btn {
+        padding: 3px 6px;
+        font-size: 10px;
+    }
+    #side-panel {
+        width: 300px;
+    }
+}

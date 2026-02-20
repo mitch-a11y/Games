@@ -375,6 +375,26 @@ const Game = {
             const data = localStorage.getItem('hanse_save');
             if (!data) return false;
             this.state = JSON.parse(data);
+            // Migrate old saves: add priceHistory if missing
+            CITY_IDS.forEach(cityId => {
+                if (!this.state.cities[cityId]) return;
+                const market = this.state.cities[cityId].market;
+                GOOD_IDS.forEach(goodId => {
+                    if (market[goodId] && !market[goodId].priceHistory) {
+                        const p = market[goodId].price;
+                        market[goodId].priceHistory = [];
+                        for (let i = 0; i < PRICE_HISTORY_LENGTH; i++) {
+                            market[goodId].priceHistory.push(p + Utils.randInt(-3, 3));
+                        }
+                        market[goodId].avgPrice = p;
+                        market[goodId].minPrice = p;
+                        market[goodId].maxPrice = p;
+                        market[goodId].totalBought = market[goodId].totalBought || 0;
+                        market[goodId].totalSold = market[goodId].totalSold || 0;
+                    }
+                });
+            });
+            if (!this.state.player.totalTraded) this.state.player.totalTraded = 0;
             this.start();
             return true;
         } catch (e) {
