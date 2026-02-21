@@ -84,6 +84,22 @@ const Sound = {
                 this.playTone(880, 0.05, 'sine', 0.15);
                 setTimeout(() => this.playTone(1100, 0.05, 'sine', 0.1), 50);
                 break;
+            case 'combat_start':
+                this.playTone(220, 0.2, 'sawtooth', 0.25);
+                setTimeout(() => this.playTone(185, 0.2, 'sawtooth', 0.25), 150);
+                setTimeout(() => this.playTone(165, 0.3, 'sawtooth', 0.2), 300);
+                setTimeout(() => this.playTone(220, 0.15, 'square', 0.15), 500);
+                break;
+            case 'combat_cannon':
+                this.playTone(110, 0.15, 'sawtooth', 0.3);
+                setTimeout(() => this.playTone(80, 0.2, 'square', 0.2), 80);
+                setTimeout(() => this.playTone(55, 0.25, 'sawtooth', 0.15), 160);
+                break;
+            case 'combat_victory':
+                [523, 659, 784, 1047].forEach((f, i) => {
+                    setTimeout(() => this.playTone(f, 0.3, 'triangle', 0.2), i * 150);
+                });
+                break;
             case 'newgame':
                 [523, 587, 659, 784].forEach((f, i) => {
                     setTimeout(() => this.playTone(f, 0.25, 'triangle', 0.2), i * 200);

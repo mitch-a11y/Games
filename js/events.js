@@ -6,36 +6,18 @@ const EVENT_TEMPLATES = [
     {
         id: 'pirate_attack',
         name: 'Piratenangriff!',
-        icon: '🏴‍☠️',
+        icon: '\uD83C\uDFF4\u200D\u2620\uFE0F',
         text: 'Piraten greifen {ship} nahe {city} an!',
         type: 'combat',
         chance: 0.12,
         requiresSailing: true,
         effect(gameState, params) {
             const ship = params.ship;
-            const damage = Utils.randInt(10, 30);
-            const lostGold = Utils.randInt(50, 300);
 
-            ship.hull = Math.max(1, ship.hull - damage);
-            if (ship.hull < ship.maxHull * 0.3) ship.damaged = true;
+            // Trigger interactive naval combat instead of passive damage
+            Combat.startCombat(ship, gameState);
 
-            // Chance to lose cargo
-            const lostGoods = [];
-            if (Math.random() < 0.4) {
-                const goodIds = Object.keys(ship.cargo);
-                if (goodIds.length > 0) {
-                    const lostGood = Utils.pick(goodIds);
-                    const lostAmt = Math.floor(ship.cargo[lostGood] * Utils.rand(0.1, 0.4));
-                    if (lostAmt > 0) {
-                        removeCargo(ship, lostGood, lostAmt);
-                        lostGoods.push(`${lostAmt} ${GOODS[lostGood].name}`);
-                    }
-                }
-            }
-
-            let msg = `${ship.name} wurde von Piraten angegriffen! ${damage} Rumpfschaden.`;
-            if (lostGoods.length > 0) msg += ` Verloren: ${lostGoods.join(', ')}.`;
-            return msg;
+            return `${ship.name} wird von Piraten angegriffen! Zum Kampf!`;
         }
     },
     {
