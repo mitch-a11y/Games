@@ -77,6 +77,9 @@ const Game = {
         // Set initial reputation
         this.state.player.reputation[homeCity] = 10;
 
+        // Initialize quests
+        Quests.init(this.state);
+
         this.start();
     },
 
@@ -183,6 +186,15 @@ const Game = {
         // Update player rank
         this.checkRankUp();
 
+        // Check quests periodically
+        if (this.state.player.daysPlayed % 5 === 0) {
+            const completed = Quests.checkQuests(this.state);
+            completed.forEach(quest => {
+                UI.addLogMessage(`Auftrag abgeschlossen: ${quest.name} - ${quest.rewardText} erhalten!`, 'event');
+                UI.showQuestComplete(quest);
+            });
+        }
+
         // Update UI periodically
         this.state.player.daysPlayed++;
         if (this.state.player.daysPlayed % 2 === 0) {
@@ -249,6 +261,9 @@ const Game = {
         ship.route = null;
         ship.progress = 0;
         ship.destination = null;
+
+        // Track city visit for quests
+        Quests.trackCityVisit(this.state, dest);
 
         UI.addLogMessage(`${ship.name} ist in ${CITIES_DATA[dest].displayName} angekommen.`, 'info');
         Sound.play('arrive');
@@ -395,6 +410,7 @@ const Game = {
                 });
             });
             if (!this.state.player.totalTraded) this.state.player.totalTraded = 0;
+            Quests.migrate(this.state);
             this.start();
             return true;
         } catch (e) {
