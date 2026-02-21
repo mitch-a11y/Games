@@ -1,6 +1,6 @@
 /* ============================================
    HANSE - Enhanced Map Renderer
-   Phase 2: Water effects, better ships, wakes
+   Phase 3: Terrain, atmosphere, visual polish
    ============================================ */
 
 const GameMap = {
@@ -26,6 +26,12 @@ const GameMap = {
     clouds: [],
     // Compass rose rotation
     compassAngle: 0,
+    // Harbor smoke particles
+    smokeParticles: [],
+    // Ship arrival particles
+    arrivalParticles: [],
+    // Seeded terrain features (generated once per resize)
+    terrainSeed: null,
 
     init() {
         this.canvas = document.getElementById('game-map');
@@ -69,6 +75,61 @@ const GameMap = {
                 scale: 0.6 + Math.random() * 0.8,
                 opacity: 0.06 + Math.random() * 0.08,
                 blobs: this._generateCloudBlobs()
+            });
+        }
+        // Generate terrain seed for deterministic placement
+        this.generateTerrainSeed();
+    },
+
+    generateTerrainSeed() {
+        // Seeded random for consistent terrain
+        const rng = (seed) => { let s = seed; return () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; }; };
+        const r = rng(42);
+        this.terrainSeed = {
+            mountains: [],
+            forests: [],
+            treeClusters: []
+        };
+        // Norwegian mountains (spine along western Scandinavia)
+        for (let i = 0; i < 18; i++) {
+            this.terrainSeed.mountains.push({
+                x: 248 + r() * 25, y: 15 + i * 14 + r() * 8,
+                size: 0.6 + r() * 0.6, snow: r() > 0.4
+            });
+        }
+        // Swedish highlands
+        for (let i = 0; i < 8; i++) {
+            this.terrainSeed.mountains.push({
+                x: 320 + r() * 80, y: 140 + i * 18 + r() * 10,
+                size: 0.4 + r() * 0.4, snow: r() > 0.6
+            });
+        }
+        // Scandinavian forests
+        for (let i = 0; i < 40; i++) {
+            this.terrainSeed.forests.push({
+                x: 290 + r() * 200, y: 30 + r() * 230,
+                size: 0.4 + r() * 0.5, count: 2 + Math.floor(r() * 4)
+            });
+        }
+        // Finnish forests
+        for (let i = 0; i < 25; i++) {
+            this.terrainSeed.forests.push({
+                x: 670 + r() * 200, y: 20 + r() * 160,
+                size: 0.35 + r() * 0.4, count: 2 + Math.floor(r() * 3)
+            });
+        }
+        // German/Polish forests
+        for (let i = 0; i < 30; i++) {
+            this.terrainSeed.forests.push({
+                x: 300 + r() * 400, y: 410 + r() * 150,
+                size: 0.3 + r() * 0.35, count: 2 + Math.floor(r() * 3)
+            });
+        }
+        // Baltic states forests
+        for (let i = 0; i < 15; i++) {
+            this.terrainSeed.forests.push({
+                x: 770 + r() * 130, y: 380 + r() * 180,
+                size: 0.3 + r() * 0.35, count: 2 + Math.floor(r() * 3)
             });
         }
     },
@@ -121,12 +182,19 @@ const GameMap = {
         const ctx = this.ctx;
         this.animFrame++;
 
-        // Deep ocean gradient background
+        // Seasonal tint factor (month 1-12)
+        const month = gameState && gameState.date ? gameState.date.month : 6;
+        const seasonDark = this._getSeasonalDarkness(month);
+
+        // Deep ocean gradient background with seasonal tint
         const grad = ctx.createLinearGradient(0, 0, 0, this.height);
-        grad.addColorStop(0, '#071a30');
-        grad.addColorStop(0.3, '#0c2844');
-        grad.addColorStop(0.6, '#0e3058');
-        grad.addColorStop(1, '#0a2240');
+        const r0 = Math.round(7 * (1 - seasonDark * 0.3));
+        const g0 = Math.round(26 * (1 - seasonDark * 0.2));
+        const b0 = Math.round(48 * (1 - seasonDark * 0.15));
+        grad.addColorStop(0, `rgb(${r0},${g0},${b0})`);
+        grad.addColorStop(0.3, `rgb(${Math.round(12*(1-seasonDark*0.25))},${Math.round(40*(1-seasonDark*0.15))},${Math.round(68*(1-seasonDark*0.1))})`);
+        grad.addColorStop(0.6, `rgb(${Math.round(14*(1-seasonDark*0.2))},${Math.round(48*(1-seasonDark*0.12))},${Math.round(88*(1-seasonDark*0.08))})`);
+        grad.addColorStop(1, `rgb(${Math.round(10*(1-seasonDark*0.25))},${Math.round(34*(1-seasonDark*0.15))},${Math.round(64*(1-seasonDark*0.1))})`);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, this.width, this.height);
 
@@ -157,8 +225,14 @@ const GameMap = {
             this.drawShips(ctx, gameState);
         }
 
+        // Harbor smoke particles (behind city labels)
+        this.drawHarborSmoke(ctx, gameState);
+
         // Cities on top
         this.drawCities(ctx, gameState);
+
+        // Lighthouse beacons
+        this.drawLighthouses(ctx, gameState);
 
         // Hovered city highlight
         if (this.hoveredCity) {
@@ -168,8 +242,27 @@ const GameMap = {
         // Seagulls (on top of everything, in the sky)
         this.drawSeagulls(ctx);
 
+        // Arrival particles
+        this.drawArrivalParticles(ctx);
+
+        // Weather effects overlay
+        this.drawWeatherEffects(ctx, gameState);
+
+        // Seasonal darkness overlay
+        if (seasonDark > 0.1) {
+            ctx.fillStyle = `rgba(5, 10, 25, ${seasonDark * 0.15})`;
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+
         // Compass rose
         this.drawCompass(ctx, gameState);
+    },
+
+    _getSeasonalDarkness(month) {
+        // 0 = summer (bright), 1 = deep winter (dark)
+        // Month 6-7 = summer (0), Month 12-1 = winter (1)
+        const distFromSummer = Math.abs(((month - 1 + 6) % 12) - 6);
+        return distFromSummer / 6;
     },
 
     drawSea(ctx) {
@@ -247,49 +340,209 @@ const GameMap = {
         const ctx = this.landCtx;
         ctx.clearRect(0, 0, this.width, this.height);
 
-        // Land with gradient
+        // --- Shallow water zone (drawn first, behind land) ---
+        ctx.save();
+        const shallowGrad = ctx.createLinearGradient(0, 0, 0, this.height);
+        shallowGrad.addColorStop(0, 'rgba(30, 90, 140, 0.5)');
+        shallowGrad.addColorStop(0.5, 'rgba(35, 100, 150, 0.5)');
+        shallowGrad.addColorStop(1, 'rgba(28, 85, 130, 0.5)');
+        ctx.fillStyle = shallowGrad;
+        ctx.strokeStyle = 'rgba(50, 120, 170, 0.3)';
+        ctx.lineWidth = 1;
+        this.drawAllLandMasses(ctx, false, 12);
+        // Inner lighter band
+        ctx.fillStyle = 'rgba(50, 130, 180, 0.25)';
+        this.drawAllLandMasses(ctx, false, 6);
+        ctx.restore();
+
+        // --- Main land with gradient ---
         const landGrad = ctx.createLinearGradient(0, 0, 0, this.height);
         landGrad.addColorStop(0, '#2a5e2a');
-        landGrad.addColorStop(0.5, '#336633');
+        landGrad.addColorStop(0.3, '#336633');
+        landGrad.addColorStop(0.6, '#3a7035');
         landGrad.addColorStop(1, '#2a5a28');
 
         ctx.fillStyle = landGrad;
         ctx.strokeStyle = '#4a8a4a';
         ctx.lineWidth = 1.5;
-
-        // All land masses
         this.drawAllLandMasses(ctx);
 
-        // Coastline shadow (draw land masses again with shadow)
+        // Coastline shadow
         ctx.shadowColor = 'rgba(0, 20, 40, 0.4)';
         ctx.shadowBlur = 6;
         ctx.shadowOffsetX = 2;
         ctx.shadowOffsetY = 2;
-        ctx.fillStyle = 'rgba(0,0,0,0)'; // invisible fill
+        ctx.fillStyle = 'rgba(0,0,0,0)';
         ctx.strokeStyle = 'rgba(60, 100, 60, 0.5)';
         ctx.lineWidth = 1;
-        this.drawAllLandMasses(ctx, true); // stroke only
+        this.drawAllLandMasses(ctx, true);
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
 
-        // Shallow water (lighter coastal areas)
-        ctx.globalCompositeOperation = 'destination-over';
-        ctx.fillStyle = landGrad;
-        this.drawAllLandMasses(ctx, false, 4); // expanded
-        ctx.globalCompositeOperation = 'source-over';
-
-        // Add terrain texture dots
-        ctx.fillStyle = 'rgba(50, 110, 50, 0.3)';
-        for (let i = 0; i < 200; i++) {
+        // --- Terrain texture (subtle dots) ---
+        ctx.fillStyle = 'rgba(50, 110, 50, 0.2)';
+        for (let i = 0; i < 300; i++) {
             const tx = Math.random() * this.width;
             const ty = Math.random() * this.height;
-            // Only draw if point is on land (simplified check)
             ctx.beginPath();
-            ctx.arc(tx, ty, 1, 0, Math.PI * 2);
+            ctx.arc(tx, ty, 0.8 + Math.random(), 0, Math.PI * 2);
             ctx.fill();
         }
+
+        // --- Rivers ---
+        this.drawRivers(ctx);
+
+        // --- Mountains ---
+        this.drawMountains(ctx);
+
+        // --- Forests ---
+        this.drawForests(ctx);
+    },
+
+    drawRivers(ctx) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(60, 130, 190, 0.6)';
+        ctx.lineWidth = 1.5 * this.scale;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Elbe - flows into Hamburg from south
+        const elbe = [[430, 600], [432, 540], [428, 490], [430, 450], [432, 420], [430, 370]];
+        this.drawRiverPath(ctx, elbe, 1.5);
+
+        // Oder - flows into Stettin from south
+        const oder = [[610, 600], [615, 530], [618, 480], [615, 440], [616, 400], [615, 370]];
+        this.drawRiverPath(ctx, oder, 1.3);
+
+        // Weichsel/Vistula - flows into Danzig from south
+        const weichsel = [[718, 600], [722, 530], [725, 470], [720, 420], [720, 380], [720, 340]];
+        this.drawRiverPath(ctx, weichsel, 1.4);
+
+        // Weser - flows near Bremen
+        const weser = [[388, 600], [390, 520], [392, 460], [390, 385]];
+        this.drawRiverPath(ctx, weser, 1.0);
+
+        ctx.restore();
+    },
+
+    drawRiverPath(ctx, points, widthMul) {
+        if (points.length < 2) return;
+        ctx.beginPath();
+        const p0 = this.worldToScreen(points[0][0], points[0][1]);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < points.length; i++) {
+            const p = this.worldToScreen(points[i][0], points[i][1]);
+            if (i < points.length - 1) {
+                const pn = this.worldToScreen(points[i+1][0], points[i+1][1]);
+                const cx = (p.x + pn.x) / 2;
+                const cy = (p.y + pn.y) / 2;
+                ctx.quadraticCurveTo(p.x, p.y, cx, cy);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        }
+        ctx.lineWidth = widthMul * this.scale;
+        ctx.strokeStyle = 'rgba(50, 120, 180, 0.5)';
+        ctx.stroke();
+        // Highlight
+        ctx.lineWidth = widthMul * 0.5 * this.scale;
+        ctx.strokeStyle = 'rgba(80, 160, 220, 0.3)';
+        ctx.stroke();
+    },
+
+    drawMountains(ctx) {
+        if (!this.terrainSeed) return;
+        ctx.save();
+
+        this.terrainSeed.mountains.forEach(m => {
+            const p = this.worldToScreen(m.x, m.y);
+            const s = m.size * this.scale * 6;
+
+            // Mountain shadow
+            ctx.fillStyle = 'rgba(20, 50, 20, 0.35)';
+            ctx.beginPath();
+            ctx.moveTo(p.x - s * 0.9, p.y + s * 0.35);
+            ctx.lineTo(p.x + s * 0.2, p.y - s * 0.8);
+            ctx.lineTo(p.x + s * 1.1, p.y + s * 0.35);
+            ctx.closePath();
+            ctx.fill();
+
+            // Mountain body
+            ctx.fillStyle = 'rgba(60, 90, 50, 0.7)';
+            ctx.beginPath();
+            ctx.moveTo(p.x - s * 0.8, p.y + s * 0.3);
+            ctx.lineTo(p.x, p.y - s * 0.9);
+            ctx.lineTo(p.x + s * 0.8, p.y + s * 0.3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Lighter face
+            ctx.fillStyle = 'rgba(80, 120, 60, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y - s * 0.9);
+            ctx.lineTo(p.x + s * 0.8, p.y + s * 0.3);
+            ctx.lineTo(p.x + s * 0.1, p.y + s * 0.15);
+            ctx.closePath();
+            ctx.fill();
+
+            // Snow cap
+            if (m.snow) {
+                ctx.fillStyle = 'rgba(220, 230, 240, 0.7)';
+                ctx.beginPath();
+                ctx.moveTo(p.x - s * 0.2, p.y - s * 0.55);
+                ctx.lineTo(p.x, p.y - s * 0.9);
+                ctx.lineTo(p.x + s * 0.2, p.y - s * 0.55);
+                ctx.quadraticCurveTo(p.x, p.y - s * 0.45, p.x - s * 0.2, p.y - s * 0.55);
+                ctx.closePath();
+                ctx.fill();
+            }
+        });
+        ctx.restore();
+    },
+
+    drawForests(ctx) {
+        if (!this.terrainSeed) return;
+        ctx.save();
+
+        this.terrainSeed.forests.forEach(f => {
+            for (let t = 0; t < f.count; t++) {
+                const ox = (t - f.count / 2) * 5 * f.size;
+                const oy = ((t % 2) - 0.5) * 3 * f.size;
+                const p = this.worldToScreen(f.x + ox, f.y + oy);
+                const s = f.size * this.scale * 4;
+
+                // Tree shadow
+                ctx.fillStyle = 'rgba(15, 40, 15, 0.25)';
+                ctx.beginPath();
+                ctx.ellipse(p.x + s * 0.15, p.y + s * 0.45, s * 0.45, s * 0.15, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Tree trunk
+                ctx.fillStyle = 'rgba(80, 55, 30, 0.6)';
+                ctx.fillRect(p.x - s * 0.05, p.y + s * 0.1, s * 0.1, s * 0.3);
+
+                // Tree canopy (dark triangle)
+                ctx.fillStyle = 'rgba(30, 70, 25, 0.65)';
+                ctx.beginPath();
+                ctx.moveTo(p.x - s * 0.35, p.y + s * 0.15);
+                ctx.lineTo(p.x, p.y - s * 0.5);
+                ctx.lineTo(p.x + s * 0.35, p.y + s * 0.15);
+                ctx.closePath();
+                ctx.fill();
+
+                // Lighter top layer
+                ctx.fillStyle = 'rgba(50, 100, 40, 0.45)';
+                ctx.beginPath();
+                ctx.moveTo(p.x - s * 0.25, p.y - s * 0.05);
+                ctx.lineTo(p.x, p.y - s * 0.5);
+                ctx.lineTo(p.x + s * 0.25, p.y - s * 0.05);
+                ctx.closePath();
+                ctx.fill();
+            }
+        });
+        ctx.restore();
     },
 
     drawAllLandMasses(ctx, strokeOnly, expand) {
@@ -307,8 +560,12 @@ const GameMap = {
             [[660,0],[650,65],[655,135],[672,190],[715,220],[778,205],[838,168],[895,135],[920,108],[920,0]],
             // Jutland (Denmark)
             [[375,290],[388,312],[400,340],[412,368],[422,398],[428,418],[408,422],[388,405],[372,378],[358,342],[368,308]],
-            // Danish Islands (Funen/Zealand)
-            [[440,312],[460,318],[475,332],[470,350],[455,358],[438,348],[432,328],[440,312]],
+            // Funen (Denmark)
+            [[438,315],[452,312],[462,320],[460,336],[452,342],[438,338],[433,328],[438,315]],
+            // Zealand (Denmark)
+            [[468,308],[485,310],[492,322],[490,340],[482,350],[468,348],[460,335],[462,318],[468,308]],
+            // Lolland/Falster
+            [[470,354],[488,352],[495,358],[492,366],[478,368],[468,362],[470,354]],
             // Britain
             [[168,322],[198,308],[232,328],[248,365],[252,405],[242,438],[225,462],[200,478],[168,482],[148,462],[132,432],[128,398],[138,365],[152,340]],
             // Northern Germany / Poland coast
@@ -318,7 +575,14 @@ const GameMap = {
             // Northwestern Russia
             [[920,158],[942,145],[968,132],[1005,122],[1050,120],[1100,128],[1150,145],[1200,155],[1200,700],[920,700]],
             // Gotland
-            [[632,238],[650,242],[655,260],[652,280],[640,290],[628,282],[625,262],[630,245]]
+            [[632,238],[650,242],[655,260],[652,280],[640,290],[628,282],[625,262],[630,245]],
+            // Ruegen (near Stralsund)
+            [[575,298],[588,294],[596,300],[598,312],[592,318],[580,316],[574,308],[575,298]],
+            // Bornholm
+            [[548,282],[558,278],[566,284],[565,294],[558,300],[548,296],[545,288],[548,282]],
+            // Aaland Islands (between Sweden and Finland)
+            [[648,128],[656,125],[662,130],[660,138],[654,142],[648,138],[646,132],[648,128]],
+            [[640,140],[646,138],[650,143],[648,148],[642,148],[640,143],[640,140]]
         ];
     },
 
@@ -413,9 +677,9 @@ const GameMap = {
 
             // Animated glow for selected city
             if (isSelected) {
-                const pulseR = radius + 8 + Math.sin(t * 0.06) * 3;
+                const pulseR = radius + 10 + Math.sin(t * 0.06) * 3;
                 const grd = ctx.createRadialGradient(pos.x, pos.y, radius, pos.x, pos.y, pulseR);
-                grd.addColorStop(0, 'rgba(230, 168, 23, 0.4)');
+                grd.addColorStop(0, 'rgba(230, 168, 23, 0.5)');
                 grd.addColorStop(1, 'rgba(230, 168, 23, 0)');
                 ctx.beginPath();
                 ctx.arc(pos.x, pos.y, pulseR, 0, Math.PI * 2);
@@ -426,7 +690,7 @@ const GameMap = {
             // Home city golden ring
             if (isHome) {
                 ctx.beginPath();
-                ctx.arc(pos.x, pos.y, radius + 5, 0, Math.PI * 2);
+                ctx.arc(pos.x, pos.y, radius + 6, 0, Math.PI * 2);
                 ctx.strokeStyle = '#ffd700';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([3, 3]);
@@ -444,50 +708,184 @@ const GameMap = {
                 ctx.stroke();
             }
 
-            // Main city circle with gradient
-            const cityGrad = ctx.createRadialGradient(pos.x - 1, pos.y - 1, 0, pos.x, pos.y, radius);
-            if (isSelected) {
-                cityGrad.addColorStop(0, '#ffe060');
-                cityGrad.addColorStop(1, '#c89018');
-            } else if (hasKontor) {
-                cityGrad.addColorStop(0, '#6ab8ff');
-                cityGrad.addColorStop(1, '#3080d0');
+            // --- Building silhouette for important cities ---
+            if (city.importance >= 4) {
+                this.drawCitySilhouette(ctx, pos.x, pos.y, radius, city.importance, isSelected, hasKontor);
+            } else if (city.importance >= 3) {
+                this.drawSmallCitySilhouette(ctx, pos.x, pos.y, radius, isSelected, hasKontor);
             } else {
-                cityGrad.addColorStop(0, '#d8c080');
-                cityGrad.addColorStop(1, '#a08040');
+                // Small cities: simple dot with gradient
+                const cityGrad = ctx.createRadialGradient(pos.x - 1, pos.y - 1, 0, pos.x, pos.y, radius);
+                if (isSelected) {
+                    cityGrad.addColorStop(0, '#ffe060');
+                    cityGrad.addColorStop(1, '#c89018');
+                } else if (hasKontor) {
+                    cityGrad.addColorStop(0, '#6ab8ff');
+                    cityGrad.addColorStop(1, '#3080d0');
+                } else {
+                    cityGrad.addColorStop(0, '#d8c080');
+                    cityGrad.addColorStop(1, '#a08040');
+                }
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = cityGrad;
+                ctx.fill();
+                ctx.strokeStyle = isSelected || isHovered ? '#fff' : 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = isSelected || isHovered ? 1.5 : 0.8;
+                ctx.stroke();
             }
 
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = cityGrad;
-            ctx.fill();
-            ctx.strokeStyle = isSelected || isHovered ? '#fff' : 'rgba(255,255,255,0.6)';
-            ctx.lineWidth = isSelected || isHovered ? 1.5 : 0.8;
-            ctx.stroke();
-
             // City name with shadow
-            const fontSize = Math.max(10, Math.round(11 * this.scale));
-            ctx.font = `${isSelected ? 'bold ' : ''}${fontSize}px sans-serif`;
+            const fontSize = Math.max(10, Math.round((city.importance >= 4 ? 12 : 11) * this.scale));
+            ctx.font = `${isSelected || city.importance >= 4 ? 'bold ' : ''}${fontSize}px sans-serif`;
             ctx.textAlign = 'center';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 3;
-            ctx.fillStyle = isSelected ? '#ffd700' : (isHovered ? '#fff' : '#c8c0a8');
-            ctx.fillText(city.displayName, pos.x, pos.y - radius - 5);
+            ctx.shadowColor = 'rgba(0,0,0,0.9)';
+            ctx.shadowBlur = 4;
+            ctx.fillStyle = isSelected ? '#ffd700' : (isHovered ? '#fff' : (city.importance >= 4 ? '#e8dcc0' : '#c8c0a8'));
+            const nameY = city.importance >= 3 ? pos.y - radius - 10 : pos.y - radius - 5;
+            ctx.fillText(city.displayName, pos.x, nameY);
             ctx.shadowBlur = 0;
 
             // Small ship count badge
             if (dockedCount > 0) {
-                const bx = pos.x + radius + 2;
+                const bx = pos.x + radius + 4;
                 const by = pos.y - radius - 2;
                 ctx.fillStyle = '#2980b9';
                 ctx.beginPath();
-                ctx.arc(bx, by, 6, 0, Math.PI * 2);
+                ctx.arc(bx, by, 7, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
                 ctx.fillStyle = '#fff';
-                ctx.font = '8px sans-serif';
+                ctx.font = 'bold 8px sans-serif';
                 ctx.fillText(dockedCount, bx, by + 3);
             }
         });
+    },
+
+    // Draw building silhouette for importance 4-5 cities (church tower + buildings)
+    drawCitySilhouette(ctx, x, y, radius, importance, isSelected, hasKontor) {
+        const s = this.scale * (importance >= 5 ? 1.4 : 1.15);
+        ctx.save();
+
+        // Ground platform
+        const baseColor = isSelected ? '#c89018' : (hasKontor ? '#3080d0' : '#8a7040');
+        const wallColor = isSelected ? '#e8c050' : (hasKontor ? '#4a98d8' : '#b09060');
+        const roofColor = isSelected ? '#c04020' : '#8b3020';
+
+        // Shadow under buildings
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(x, y + 4 * s, 12 * s, 3 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Left building
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(x - 10 * s, y - 6 * s, 6 * s, 10 * s);
+        ctx.fillStyle = roofColor;
+        ctx.beginPath();
+        ctx.moveTo(x - 11 * s, y - 6 * s);
+        ctx.lineTo(x - 7 * s, y - 11 * s);
+        ctx.lineTo(x - 3 * s, y - 6 * s);
+        ctx.closePath();
+        ctx.fill();
+
+        // Center church tower
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(x - 2.5 * s, y - 8 * s, 5 * s, 12 * s);
+        // Tower spire
+        ctx.fillStyle = roofColor;
+        ctx.beginPath();
+        ctx.moveTo(x - 3.5 * s, y - 8 * s);
+        ctx.lineTo(x, y - 18 * s);
+        ctx.lineTo(x + 3.5 * s, y - 8 * s);
+        ctx.closePath();
+        ctx.fill();
+        // Cross on top
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 18 * s);
+        ctx.lineTo(x, y - 21 * s);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 1.5 * s, y - 19.5 * s);
+        ctx.lineTo(x + 1.5 * s, y - 19.5 * s);
+        ctx.stroke();
+
+        // Right building
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(x + 4 * s, y - 5 * s, 6 * s, 9 * s);
+        ctx.fillStyle = roofColor;
+        ctx.beginPath();
+        ctx.moveTo(x + 3 * s, y - 5 * s);
+        ctx.lineTo(x + 7 * s, y - 9 * s);
+        ctx.lineTo(x + 11 * s, y - 5 * s);
+        ctx.closePath();
+        ctx.fill();
+
+        // Window dots
+        ctx.fillStyle = 'rgba(255, 220, 100, 0.5)';
+        [[x - 8 * s, y - 2 * s], [x - 6 * s, y - 2 * s],
+         [x + 6 * s, y - 1 * s], [x + 8 * s, y - 1 * s],
+         [x - 0.5 * s, y - 4 * s], [x + 0.5 * s, y - 4 * s]].forEach(([wx, wy]) => {
+            ctx.fillRect(wx, wy, 1.2 * s, 1.5 * s);
+        });
+
+        // Outline
+        ctx.strokeStyle = isSelected ? 'rgba(255,215,0,0.6)' : 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x - 10 * s, y - 6 * s, 6 * s, 10 * s);
+        ctx.strokeRect(x - 2.5 * s, y - 8 * s, 5 * s, 12 * s);
+        ctx.strokeRect(x + 4 * s, y - 5 * s, 6 * s, 9 * s);
+
+        ctx.restore();
+    },
+
+    // Draw smaller building for importance 3 cities
+    drawSmallCitySilhouette(ctx, x, y, radius, isSelected, hasKontor) {
+        const s = this.scale * 1.0;
+        ctx.save();
+
+        const wallColor = isSelected ? '#e8c050' : (hasKontor ? '#4a98d8' : '#b09060');
+        const roofColor = isSelected ? '#c04020' : '#8b3020';
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(x, y + 3 * s, 8 * s, 2.5 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Single building with peaked roof
+        ctx.fillStyle = wallColor;
+        ctx.fillRect(x - 4 * s, y - 4 * s, 8 * s, 7 * s);
+        ctx.fillStyle = roofColor;
+        ctx.beginPath();
+        ctx.moveTo(x - 5 * s, y - 4 * s);
+        ctx.lineTo(x, y - 10 * s);
+        ctx.lineTo(x + 5 * s, y - 4 * s);
+        ctx.closePath();
+        ctx.fill();
+
+        // Small tower/spire
+        ctx.fillStyle = roofColor;
+        ctx.beginPath();
+        ctx.moveTo(x - 1 * s, y - 10 * s);
+        ctx.lineTo(x, y - 13 * s);
+        ctx.lineTo(x + 1 * s, y - 10 * s);
+        ctx.closePath();
+        ctx.fill();
+
+        // Window
+        ctx.fillStyle = 'rgba(255, 220, 100, 0.4)';
+        ctx.fillRect(x - 1 * s, y - 1.5 * s, 2 * s, 2.5 * s);
+
+        ctx.strokeStyle = isSelected ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x - 4 * s, y - 4 * s, 8 * s, 7 * s);
+
+        ctx.restore();
     },
 
     drawCityHighlight(ctx, cityId) {
@@ -808,29 +1206,236 @@ const GameMap = {
     },
 
     drawWakes(ctx) {
-        // Update and draw wake particles
+        // Update and draw wake particles with foam
         for (let i = this.wakes.length - 1; i >= 0; i--) {
             const w = this.wakes[i];
             w.life -= w.decay;
-            w.size += 0.08;
+            w.size += 0.1;
 
             if (w.life <= 0) {
                 this.wakes.splice(i, 1);
                 continue;
             }
 
-            ctx.globalAlpha = w.life * 0.3;
+            // Outer ring
+            ctx.globalAlpha = w.life * 0.25;
             ctx.strokeStyle = 'rgba(180, 220, 255, 0.6)';
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.8;
             ctx.beginPath();
             ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
             ctx.stroke();
+
+            // Inner foam fill (white core that fades)
+            if (w.life > 0.5) {
+                ctx.globalAlpha = (w.life - 0.5) * 0.4;
+                ctx.fillStyle = 'rgba(200, 230, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(w.x, w.y, w.size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Foam specks around wake
+            if (w.life > 0.7 && w.size > 2) {
+                ctx.globalAlpha = (w.life - 0.7) * 0.6;
+                ctx.fillStyle = 'rgba(220, 240, 255, 0.6)';
+                for (let j = 0; j < 3; j++) {
+                    const angle = (j / 3) * Math.PI * 2 + w.size * 0.5;
+                    const fx = w.x + Math.cos(angle) * w.size * 0.8;
+                    const fy = w.y + Math.sin(angle) * w.size * 0.8;
+                    ctx.beginPath();
+                    ctx.arc(fx, fy, 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
         }
         ctx.globalAlpha = 1;
 
         // Cap wake count for performance
-        if (this.wakes.length > 200) {
-            this.wakes.splice(0, this.wakes.length - 200);
+        if (this.wakes.length > 250) {
+            this.wakes.splice(0, this.wakes.length - 250);
+        }
+    },
+
+    // --- Harbor smoke: wispy particles rising from cities with docked ships ---
+    drawHarborSmoke(ctx, gameState) {
+        if (!gameState || !gameState.player) return;
+        const t = this.animFrame;
+
+        // Spawn new smoke for cities with docked ships
+        CITY_IDS.forEach(id => {
+            const dockedCount = gameState.player.ships.filter(s => s.location === id).length;
+            if (dockedCount > 0 && t % 8 === 0) {
+                const city = CITIES_DATA[id];
+                const pos = this.worldToScreen(city.x, city.y);
+                this.smokeParticles.push({
+                    x: pos.x + (Math.random() - 0.5) * 10,
+                    y: pos.y - 8 * this.scale,
+                    vx: (Math.random() - 0.5) * 0.2,
+                    vy: -0.3 - Math.random() * 0.3,
+                    life: 1.0,
+                    size: 1.5 + Math.random() * 2
+                });
+            }
+        });
+
+        // Update and draw
+        for (let i = this.smokeParticles.length - 1; i >= 0; i--) {
+            const p = this.smokeParticles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx += (Math.random() - 0.5) * 0.05;
+            p.life -= 0.012;
+            p.size += 0.04;
+
+            if (p.life <= 0) {
+                this.smokeParticles.splice(i, 1);
+                continue;
+            }
+
+            ctx.globalAlpha = p.life * 0.25;
+            ctx.fillStyle = 'rgba(180, 180, 170, 0.6)';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Cap for performance
+        if (this.smokeParticles.length > 150) {
+            this.smokeParticles.splice(0, this.smokeParticles.length - 150);
+        }
+    },
+
+    // --- Lighthouses: animated beacon lights at port cities ---
+    drawLighthouses(ctx, gameState) {
+        if (!gameState) return;
+        const t = this.animFrame;
+        const month = gameState.date ? gameState.date.month : 6;
+        const seasonDark = this._getSeasonalDarkness(month);
+
+        // Lighthouses are more visible in winter/darker months
+        const beaconIntensity = 0.3 + seasonDark * 0.5;
+
+        CITY_IDS.forEach(id => {
+            const city = CITIES_DATA[id];
+            if (!city.hasShipyard) return; // Only shipyard cities get lighthouses
+
+            const pos = this.worldToScreen(city.x, city.y);
+            const beaconPhase = (t * 0.03 + city.x * 0.1) % (Math.PI * 2);
+            const beaconBright = Math.max(0, Math.sin(beaconPhase));
+
+            if (beaconBright > 0.3) {
+                const bx = pos.x + 12 * this.scale;
+                const by = pos.y - 6 * this.scale;
+                const intensity = beaconBright * beaconIntensity;
+
+                // Glow
+                const glowR = 6 + beaconBright * 8;
+                const grd = ctx.createRadialGradient(bx, by, 0, bx, by, glowR);
+                grd.addColorStop(0, `rgba(255, 220, 100, ${intensity})`);
+                grd.addColorStop(0.5, `rgba(255, 200, 50, ${intensity * 0.4})`);
+                grd.addColorStop(1, 'rgba(255, 200, 50, 0)');
+                ctx.fillStyle = grd;
+                ctx.beginPath();
+                ctx.arc(bx, by, glowR, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bright center
+                ctx.fillStyle = `rgba(255, 240, 180, ${intensity * 0.8})`;
+                ctx.beginPath();
+                ctx.arc(bx, by, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+    },
+
+    // --- Weather effects overlay ---
+    drawWeatherEffects(ctx, gameState) {
+        if (!gameState || !gameState.wind) return;
+        const t = this.animFrame;
+        const windStrength = gameState.wind.strength;
+
+        // Storm effect when wind is very strong
+        if (windStrength > 2.0) {
+            const stormIntensity = (windStrength - 2.0) / 1.0;
+            const windAngle = gameState.wind.direction * Math.PI / 4;
+
+            // Rain streaks
+            ctx.strokeStyle = `rgba(150, 180, 210, ${stormIntensity * 0.12})`;
+            ctx.lineWidth = 0.8;
+            for (let i = 0; i < 40 * stormIntensity; i++) {
+                const rx = ((i * 37 + t * 3) % this.width);
+                const ry = ((i * 53 + t * 5) % this.height);
+                const len = 8 + stormIntensity * 12;
+                ctx.beginPath();
+                ctx.moveTo(rx, ry);
+                ctx.lineTo(rx + Math.cos(windAngle + 1.2) * len, ry + Math.sin(windAngle + 1.2) * len);
+                ctx.stroke();
+            }
+
+            // Misty overlay
+            ctx.fillStyle = `rgba(100, 120, 140, ${stormIntensity * 0.06})`;
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+
+        // Calm/good weather: subtle sun rays (when wind is gentle)
+        if (windStrength < 1.0) {
+            const calmness = (1.0 - windStrength);
+            // Subtle warm overlay in upper-right
+            const sunGrd = ctx.createRadialGradient(
+                this.width * 0.85, this.height * 0.05, 0,
+                this.width * 0.85, this.height * 0.05, this.width * 0.5
+            );
+            sunGrd.addColorStop(0, `rgba(255, 240, 200, ${calmness * 0.04})`);
+            sunGrd.addColorStop(0.4, `rgba(255, 230, 180, ${calmness * 0.02})`);
+            sunGrd.addColorStop(1, 'rgba(255, 230, 180, 0)');
+            ctx.fillStyle = sunGrd;
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+    },
+
+    // --- Arrival particles when a ship docks ---
+    spawnArrivalParticles(cityId) {
+        const city = CITIES_DATA[cityId];
+        if (!city) return;
+        const pos = this.worldToScreen(city.x, city.y);
+        for (let i = 0; i < 15; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.5 + Math.random() * 1.5;
+            this.arrivalParticles.push({
+                x: pos.x, y: pos.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 0.5,
+                life: 1.0,
+                size: 1 + Math.random() * 2,
+                color: Math.random() > 0.5 ? '#ffd700' : '#5dade2'
+            });
+        }
+    },
+
+    drawArrivalParticles(ctx) {
+        for (let i = this.arrivalParticles.length - 1; i >= 0; i--) {
+            const p = this.arrivalParticles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.02; // gravity
+            p.life -= 0.02;
+
+            if (p.life <= 0) {
+                this.arrivalParticles.splice(i, 1);
+                continue;
+            }
+
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        if (this.arrivalParticles.length > 200) {
+            this.arrivalParticles.splice(0, this.arrivalParticles.length - 200);
         }
     },
 

@@ -14,6 +14,7 @@
     // Title screen buttons
     document.getElementById('btn-new-game').addEventListener('click', () => {
         showScreen('setup-screen');
+        TitleCanvas.stop();
         Sound.init();
         Sound.play('click');
     });
@@ -23,6 +24,7 @@
         Sound.play('click');
         if (Game.load()) {
             showScreen('game-screen');
+            TitleCanvas.stop();
             Sound.startAmbient();
         } else {
             alert('Kein gespeichertes Spiel gefunden.');
@@ -31,12 +33,14 @@
 
     document.getElementById('btn-help').addEventListener('click', () => {
         showScreen('help-screen');
+        TitleCanvas.stop();
         Sound.init();
         Sound.play('click');
     });
 
     document.getElementById('btn-back-from-help').addEventListener('click', () => {
         showScreen('title-screen');
+        TitleCanvas.start();
         Sound.play('click');
     });
 

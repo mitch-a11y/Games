@@ -288,6 +288,9 @@ const Game = {
         UI.addLogMessage(`${ship.name} ist in ${CITIES_DATA[dest].displayName} angekommen.`, 'info');
         Sound.play('arrive');
 
+        // Arrival particle effect
+        GameMap.spawnArrivalParticles(dest);
+
         // Auto-select city
         if (GameMap.selectedCity !== dest) {
             GameMap.selectCity(dest);
@@ -447,5 +450,6 @@ const Game = {
         Sound.stopAmbient();
         document.getElementById('game-screen').classList.remove('active');
         document.getElementById('title-screen').classList.add('active');
+        TitleCanvas.start();
     }
 };
