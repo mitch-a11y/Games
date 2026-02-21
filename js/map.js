@@ -93,16 +93,78 @@ const GameMap = {
     // Seeded terrain features (generated once per resize)
     terrainSeed: null,
 
+    // --- Camera system ---
+    camera: { x: 600, y: 350, zoom: 1.0 },
+    targetCamera: { x: 600, y: 350, zoom: 1.0 },
+    cameraSmoothing: 0.12,
+    MIN_ZOOM: 0.5,
+    MAX_ZOOM: 4.0,
+    baseScale: 1,
+
+    // Pan/drag state
+    isDragging: false,
+    dragStart: { x: 0, y: 0 },
+    dragCameraStart: { x: 0, y: 0 },
+    lastDragPos: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
+    hasDragged: false,
+
+    // Ship selection & follow
+    selectedShip: null,
+    followingShip: false,
+
+    // Minimap
+    minimapCanvas: null,
+    minimapCtx: null,
+    minimapDirty: true,
+    MINIMAP_W: 160,
+    MINIMAP_H: 94,
+    minimapDragging: false,
+
+    // Land buffer cache tracking
+    lastLandZoom: 1.0,
+    lastLandCameraX: 600,
+    lastLandCameraY: 350,
+
+    // Label collision detection
+    labelRects: [],
+
+    // Route preview
+    routePreview: null,
+
+    // Cached game state for click handlers
+    _lastGameState: null,
+
+    // Touch pinch state
+    pinchStartDist: 0,
+    pinchStartZoom: 1,
+
     init() {
         this.canvas = document.getElementById('game-map');
         this.ctx = this.canvas.getContext('2d');
         // Off-screen canvas for land (static, drawn once)
         this.landCanvas = document.createElement('canvas');
         this.landCtx = this.landCanvas.getContext('2d');
+        // Minimap off-screen canvas
+        this.minimapCanvas = document.createElement('canvas');
+        this.minimapCanvas.width = this.MINIMAP_W;
+        this.minimapCanvas.height = this.MINIMAP_H;
+        this.minimapCtx = this.minimapCanvas.getContext('2d');
         this.resize();
-        window.addEventListener('resize', () => { this.resize(); this.landDirty = true; });
+        window.addEventListener('resize', () => { this.resize(); this.landDirty = true; this.minimapDirty = true; });
+        // Full input system
+        this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
         this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
-        this.canvas.addEventListener('click', (e) => this.onClick(e));
+        this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+        this.canvas.addEventListener('mouseleave', (e) => this.onMouseUp(e));
+        this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+        this.canvas.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: false });
+        this.canvas.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
+        this.canvas.addEventListener('touchend', (e) => this.onTouchEnd(e));
+        window.addEventListener('keydown', (e) => this.onKeyDown(e));
+        // Prevent context menu on canvas for right-click
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
         // Seed sparkles
         for (let i = 0; i < 60; i++) {
             this.sparkles.push({
@@ -216,12 +278,17 @@ const GameMap = {
         this.canvas.height = this.height;
         this.landCanvas.width = this.width;
         this.landCanvas.height = this.height;
-        this.scaleX = this.width / CONFIG.MAP_WIDTH;
-        this.scaleY = this.height / CONFIG.MAP_HEIGHT;
-        this.scale = Math.min(this.scaleX, this.scaleY);
-        this.offsetX = (this.width - CONFIG.MAP_WIDTH * this.scale) / 2;
-        this.offsetY = (this.height - CONFIG.MAP_HEIGHT * this.scale) / 2;
+        // Base scale: how 1200x700 world fits in canvas at zoom=1
+        this.baseScale = Math.min(this.width / CONFIG.MAP_WIDTH, this.height / CONFIG.MAP_HEIGHT);
+        this.updateCameraOffsets();
         this.landDirty = true;
+    },
+
+    updateCameraOffsets() {
+        this.scale = this.baseScale * this.camera.zoom;
+        // Camera.x/y is the world point at canvas center
+        this.offsetX = this.width / 2 - this.camera.x * this.scale;
+        this.offsetY = this.height / 2 - this.camera.y * this.scale;
     },
 
     worldToScreen(x, y) {
@@ -241,6 +308,38 @@ const GameMap = {
     render(gameState) {
         const ctx = this.ctx;
         this.animFrame++;
+        this._lastGameState = gameState;
+
+        // --- Camera animation ---
+        this.camera.x += (this.targetCamera.x - this.camera.x) * this.cameraSmoothing;
+        this.camera.y += (this.targetCamera.y - this.camera.y) * this.cameraSmoothing;
+        this.camera.zoom += (this.targetCamera.zoom - this.camera.zoom) * this.cameraSmoothing;
+
+        // Apply inertia momentum from drag release
+        if (!this.isDragging) {
+            this.targetCamera.x += this.velocity.x / this.scale;
+            this.targetCamera.y += this.velocity.y / this.scale;
+            this.velocity.x *= 0.92;
+            this.velocity.y *= 0.92;
+            if (Math.abs(this.velocity.x) < 0.1) this.velocity.x = 0;
+            if (Math.abs(this.velocity.y) < 0.1) this.velocity.y = 0;
+        }
+
+        // Ship follow mode
+        if (this.followingShip && this.selectedShip) {
+            const shipWorld = this.getShipWorldPos(this.selectedShip);
+            if (shipWorld) {
+                this.targetCamera.x = shipWorld.x;
+                this.targetCamera.y = shipWorld.y;
+            }
+        }
+
+        // Clamp camera to world bounds with margin
+        this.targetCamera.x = Utils.clamp(this.targetCamera.x, -100, CONFIG.MAP_WIDTH + 100);
+        this.targetCamera.y = Utils.clamp(this.targetCamera.y, -100, CONFIG.MAP_HEIGHT + 100);
+        this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom, this.MIN_ZOOM, this.MAX_ZOOM);
+
+        this.updateCameraOffsets();
 
         // Seasonal tint factor (month 1-12)
         const month = gameState && gameState.date ? gameState.date.month : 6;
@@ -280,10 +379,17 @@ const GameMap = {
         // Draw sea routes
         this.drawRoutes(ctx, gameState);
 
-        // Pre-rendered land
-        if (this.landDirty) {
+        // Pre-rendered land (smart cache invalidation based on zoom/pan)
+        const zoomChanged = Math.abs(this.camera.zoom - this.lastLandZoom) > 0.05;
+        const panChanged = Math.abs(this.camera.x - this.lastLandCameraX) > 5 ||
+                           Math.abs(this.camera.y - this.lastLandCameraY) > 5;
+        if (this.landDirty || zoomChanged || panChanged) {
             this.renderLandToBuffer();
             this.landDirty = false;
+            this.minimapDirty = true;
+            this.lastLandZoom = this.camera.zoom;
+            this.lastLandCameraX = this.camera.x;
+            this.lastLandCameraY = this.camera.y;
         }
         ctx.drawImage(this.landCanvas, 0, 0);
 
@@ -360,8 +466,27 @@ const GameMap = {
         ctx.fillStyle = vignette;
         ctx.fillRect(0, 0, this.width, this.height);
 
+        // Minimap
+        this.drawMinimap(ctx, gameState);
+
         // Compass rose
         this.drawCompass(ctx, gameState);
+
+        // Zoom level indicator
+        if (Math.abs(this.camera.zoom - 1.0) > 0.05) {
+            ctx.font = '11px sans-serif';
+            ctx.fillStyle = 'rgba(200, 190, 160, 0.5)';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${Math.round(this.camera.zoom * 100)}%`, 12, 20);
+        }
+
+        // Follow indicator
+        if (this.followingShip && this.selectedShip) {
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = 'rgba(93, 173, 226, 0.7)';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Following: ${this.selectedShip.name}`, 12, 34);
+        }
     },
 
     _getSeasonalDarkness(month) {
@@ -711,6 +836,7 @@ const GameMap = {
         const sorted = [...this.terrainSeed.mountains].sort((a, b) => a.y - b.y);
 
         sorted.forEach(m => {
+            if (!this.isInViewport(m.x, m.y, 80)) return;
             const p = this.worldToScreen(m.x, m.y);
             const s = m.size * this.scale * 8;
 
@@ -820,6 +946,7 @@ const GameMap = {
         const sorted = [...this.terrainSeed.forests].sort((a, b) => a.y - b.y);
 
         sorted.forEach(f => {
+            if (!this.isInViewport(f.x, f.y, 60)) return;
             // Northern forests (y < 260) get conifers, southern get deciduous mix
             const isNorthern = f.y < 260;
 
@@ -1015,15 +1142,51 @@ const GameMap = {
 
         ctx.setLineDash([]);
         ctx.lineDashOffset = 0;
+
+        // Route preview (animated green dashed line when sending a ship)
+        if (this.routePreview) {
+            const elapsed = performance.now() - this.routePreview.timestamp;
+            if (elapsed > 5000) {
+                this.routePreview = null;
+            } else {
+                const from = CITIES_DATA[this.routePreview.from];
+                const to = CITIES_DATA[this.routePreview.to];
+                if (from && to) {
+                    const p1 = this.worldToScreen(from.x, from.y);
+                    const p2 = this.worldToScreen(to.x, to.y);
+                    ctx.strokeStyle = `rgba(46, 204, 113, ${0.7 - elapsed * 0.00014})`;
+                    ctx.lineWidth = 2.5;
+                    ctx.setLineDash([8, 6]);
+                    ctx.lineDashOffset = -t * 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+        }
     },
 
     drawCities(ctx, gameState) {
         const t = this.animFrame;
+        const zoom = this.camera.zoom;
+        this.labelRects = [];
 
         CITY_IDS.forEach(id => {
             const city = CITIES_DATA[id];
-            const pos = this.worldToScreen(city.x, city.y);
+
+            // Frustum culling
+            if (!this.isInViewport(city.x, city.y, 60)) return;
+
+            // LOD: at low zoom, skip unimportant cities
             const isSelected = this.selectedCity === id;
+            if (!isSelected) {
+                if (zoom < 0.65 && city.importance < 4) return;
+                if (zoom < 0.8 && city.importance < 3) return;
+            }
+
+            const pos = this.worldToScreen(city.x, city.y);
             const isHovered = this.hoveredCity === id;
             const isHome = gameState && gameState.player && gameState.player.homeCity === id;
 
@@ -1102,16 +1265,45 @@ const GameMap = {
                 ctx.stroke();
             }
 
-            // City name with shadow
-            const fontSize = Math.max(10, Math.round((city.importance >= 4 ? 12 : 11) * this.scale));
-            ctx.font = `${isSelected || city.importance >= 4 ? 'bold ' : ''}${fontSize}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.shadowColor = 'rgba(0,0,0,0.9)';
-            ctx.shadowBlur = 4;
-            ctx.fillStyle = isSelected ? '#ffd700' : (isHovered ? '#fff' : (city.importance >= 4 ? '#e8dcc0' : '#c8c0a8'));
-            const nameY = city.importance >= 3 ? pos.y - radius - 10 : pos.y - radius - 5;
-            ctx.fillText(city.displayName, pos.x, nameY);
-            ctx.shadowBlur = 0;
+            // City name with smart label rendering
+            const showLabel = isSelected || isHovered ||
+                              (zoom >= 1.0) ||
+                              (zoom >= 0.7 && city.importance >= 3) ||
+                              (city.importance >= 4);
+
+            if (showLabel) {
+                const fontSize = Utils.clamp(
+                    Math.round((city.importance >= 4 ? 12 : 11) * this.scale),
+                    8, 22
+                );
+                const isBold = isSelected || city.importance >= 4;
+                ctx.font = `${isBold ? 'bold ' : ''}${fontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+
+                const nameY = city.importance >= 3 ? pos.y - radius - 10 : pos.y - radius - 5;
+                const textWidth = ctx.measureText(city.displayName).width;
+
+                // Label collision detection
+                const labelRect = {
+                    x: pos.x - textWidth / 2 - 2,
+                    y: nameY - fontSize,
+                    w: textWidth + 4,
+                    h: fontSize + 4
+                };
+                const collides = this.labelRects.some(r =>
+                    labelRect.x < r.x + r.w && labelRect.x + labelRect.w > r.x &&
+                    labelRect.y < r.y + r.h && labelRect.y + labelRect.h > r.y
+                );
+
+                if (!collides || isSelected || city.importance >= 4) {
+                    this.labelRects.push(labelRect);
+                    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillStyle = isSelected ? '#ffd700' : (isHovered ? '#fff' : (city.importance >= 4 ? '#e8dcc0' : '#c8c0a8'));
+                    ctx.fillText(city.displayName, pos.x, nameY);
+                    ctx.shadowBlur = 0;
+                }
+            }
 
             // Small ship count badge
             if (dockedCount > 0) {
@@ -1334,28 +1526,42 @@ const GameMap = {
         }
     },
 
-    getShipScreenPos(ship, t) {
+    getShipWorldPos(ship) {
+        if (!ship || ship.status !== 'sailing' || !ship.route || ship.route.length < 2) return null;
         const fromCity = CITIES_DATA[ship.route[ship.routeIndex]];
         const toIdx = Math.min(ship.routeIndex + 1, ship.route.length - 1);
         const toCity = CITIES_DATA[ship.route[toIdx]];
         if (!fromCity || !toCity) return null;
+        return {
+            x: Utils.lerp(fromCity.x, toCity.x, ship.progress),
+            y: Utils.lerp(fromCity.y, toCity.y, ship.progress)
+        };
+    },
 
+    getShipScreenPos(ship, t) {
+        const world = this.getShipWorldPos(ship);
+        if (!world) return null;
+        const screen = this.worldToScreen(world.x, world.y);
+        const fromCity = CITIES_DATA[ship.route[ship.routeIndex]];
+        const toIdx = Math.min(ship.routeIndex + 1, ship.route.length - 1);
+        const toCity = CITIES_DATA[ship.route[toIdx]];
         const p1 = this.worldToScreen(fromCity.x, fromCity.y);
         const p2 = this.worldToScreen(toCity.x, toCity.y);
-        const prog = ship.progress;
-
-        const x = Utils.lerp(p1.x, p2.x, prog);
-        const y = Utils.lerp(p1.y, p2.y, prog)
-            + Math.sin(t * 0.08) * 2.5
-            + Math.cos(t * 0.12) * 1;
-        const angle = Utils.angle(p1.x, p1.y, p2.x, p2.y);
-
-        return { x, y, angle };
+        return {
+            x: screen.x,
+            y: screen.y + Math.sin(t * 0.08) * 2.5 + Math.cos(t * 0.12) * 1,
+            angle: Utils.angle(p1.x, p1.y, p2.x, p2.y)
+        };
     },
 
     drawDetailedShip(ctx, x, y, angle, ship, hullColor, sailColor, isPlayer) {
         const t = this.animFrame;
-        const s = isPlayer ? 1.3 : 0.9;
+        // Enforce minimum visible size: ships always at least 20px on screen
+        const baseS = isPlayer ? 1.3 : 0.9;
+        const shipWorldSize = isPlayer ? 30 : 20;
+        const shipScreenSize = shipWorldSize * this.scale;
+        const shipScale = shipScreenSize < 20 ? (20 / shipScreenSize) : 1.0;
+        const s = baseS * shipScale;
 
         ctx.save();
         ctx.translate(x, y);
@@ -2064,15 +2270,206 @@ const GameMap = {
         ctx.restore();
     },
 
+    // --- Viewport culling helpers ---
+    isInViewport(worldX, worldY, margin) {
+        margin = margin || 50;
+        const s = this.worldToScreen(worldX, worldY);
+        return s.x > -margin && s.x < this.width + margin &&
+               s.y > -margin && s.y < this.height + margin;
+    },
+
+    getViewportWorldBounds() {
+        const tl = this.screenToWorld(0, 0);
+        const br = this.screenToWorld(this.width, this.height);
+        return { left: tl.x, top: tl.y, right: br.x, bottom: br.y };
+    },
+
+    // --- Input: Mouse wheel zoom ---
+    onWheel(e) {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // World position under cursor before zoom
+        const worldBefore = this.screenToWorld(mx, my);
+
+        // Adjust zoom (~15% per scroll step)
+        const zoomDelta = e.deltaY > 0 ? 0.85 : 1.18;
+        this.targetCamera.zoom = Utils.clamp(
+            this.targetCamera.zoom * zoomDelta,
+            this.MIN_ZOOM, this.MAX_ZOOM
+        );
+
+        // Adjust camera so world point under cursor stays fixed
+        const newScale = this.baseScale * this.targetCamera.zoom;
+        this.targetCamera.x = worldBefore.x + (this.width / 2 - mx) / newScale;
+        this.targetCamera.y = worldBefore.y + (this.height / 2 - my) / newScale;
+
+        this.followingShip = false;
+    },
+
+    // --- Input: Mouse down (start drag or minimap click) ---
+    onMouseDown(e) {
+        if (e.button !== 0) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // Check minimap click first
+        if (this.isInMinimap(mx, my)) {
+            this.onMinimapClick(mx, my);
+            this.minimapDragging = true;
+            return;
+        }
+
+        this.isDragging = true;
+        this.hasDragged = false;
+        this.dragStart = { x: mx, y: my };
+        this.lastDragPos = { x: mx, y: my };
+        this.dragCameraStart = { x: this.targetCamera.x, y: this.targetCamera.y };
+        this.velocity = { x: 0, y: 0 };
+    },
+
+    // --- Input: Mouse move (drag pan + hover) ---
     onMouseMove(e) {
         const rect = this.canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
 
+        if (this.minimapDragging) {
+            this.onMinimapClick(mx, my);
+            return;
+        }
+
+        if (this.isDragging) {
+            const dx = mx - this.lastDragPos.x;
+            const dy = my - this.lastDragPos.y;
+
+            if (Math.abs(mx - this.dragStart.x) > 4 || Math.abs(my - this.dragStart.y) > 4) {
+                this.hasDragged = true;
+            }
+
+            // Pan camera in world space (opposite to drag direction)
+            this.targetCamera.x -= dx / this.scale;
+            this.targetCamera.y -= dy / this.scale;
+
+            // Track velocity for inertia
+            this.velocity = { x: -dx, y: -dy };
+            this.lastDragPos = { x: mx, y: my };
+            this.followingShip = false;
+            this.canvas.style.cursor = 'grabbing';
+
+            // Hide tooltip while dragging
+            const tooltip = document.getElementById('map-tooltip');
+            if (tooltip) tooltip.classList.add('hidden');
+            return;
+        }
+
+        // Hover detection when not dragging
+        this.updateHover(mx, my);
+    },
+
+    // --- Input: Mouse up (end drag or handle click) ---
+    onMouseUp(e) {
+        if (this.minimapDragging) {
+            this.minimapDragging = false;
+            return;
+        }
+
+        const wasDragging = this.isDragging;
+        this.isDragging = false;
+
+        if (wasDragging && !this.hasDragged && e && e.clientX !== undefined) {
+            // It was a click, not a drag
+            const rect = this.canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            this.handleClick(mx, my);
+        }
+        // Inertia velocity was set during drag, friction is applied in render()
+    },
+
+    // --- Input: Double click to zoom ---
+    onDoubleClick(e) {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const worldPos = this.screenToWorld(mx, my);
+        this.targetCamera.x = worldPos.x;
+        this.targetCamera.y = worldPos.y;
+        this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 1.8, this.MIN_ZOOM, this.MAX_ZOOM);
+        this.followingShip = false;
+    },
+
+    // --- Input: Keyboard shortcuts ---
+    onKeyDown(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        switch (e.key) {
+            case 'Home':
+            case 'h':
+                this.targetCamera = { x: 600, y: 350, zoom: 1.0 };
+                this.followingShip = false;
+                break;
+            case '+':
+            case '=':
+                this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 1.3, this.MIN_ZOOM, this.MAX_ZOOM);
+                break;
+            case '-':
+                this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 0.77, this.MIN_ZOOM, this.MAX_ZOOM);
+                break;
+            case 'Escape':
+                this.followingShip = false;
+                this.selectedShip = null;
+                break;
+        }
+    },
+
+    // --- Input: Touch support ---
+    onTouchStart(e) {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            const t = e.touches[0];
+            this.onMouseDown({ button: 0, clientX: t.clientX, clientY: t.clientY });
+        } else if (e.touches.length === 2) {
+            this.isDragging = false;
+            this.pinchStartDist = Utils.distance(
+                e.touches[0].clientX, e.touches[0].clientY,
+                e.touches[1].clientX, e.touches[1].clientY
+            );
+            this.pinchStartZoom = this.targetCamera.zoom;
+        }
+    },
+
+    onTouchMove(e) {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            this.onMouseMove({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+        } else if (e.touches.length === 2) {
+            const dist = Utils.distance(
+                e.touches[0].clientX, e.touches[0].clientY,
+                e.touches[1].clientX, e.touches[1].clientY
+            );
+            this.targetCamera.zoom = Utils.clamp(
+                this.pinchStartZoom * (dist / this.pinchStartDist),
+                this.MIN_ZOOM, this.MAX_ZOOM
+            );
+        }
+    },
+
+    onTouchEnd(e) {
+        this.onMouseUp({});
+    },
+
+    // --- Hover detection (extracted from old onMouseMove) ---
+    updateHover(mx, my) {
         this.hoveredCity = null;
 
         for (const id of CITY_IDS) {
             const city = CITIES_DATA[id];
+            if (!this.isInViewport(city.x, city.y, 30)) continue;
             const pos = this.worldToScreen(city.x, city.y);
             const radius = (4 + city.importance * 1.5) * this.scale + 10;
             if (Utils.distance(mx, my, pos.x, pos.y) < radius) {
@@ -2094,7 +2491,6 @@ const GameMap = {
             html += `<p>${city.description}</p>`;
             if (cityState) {
                 html += `<p>Einwohner: ${Utils.formatNumber(cityState.population)}</p>`;
-                // Show top produced goods
                 const produced = Object.entries(city.production).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]).slice(0,3);
                 if (produced.length > 0) {
                     html += '<p>Produziert: ' + produced.map(([g]) => GOODS[g].icon).join(' ') + '</p>';
@@ -2105,22 +2501,161 @@ const GameMap = {
             if (docked.length > 0) html += `<p>&#9973; ${docked.length} Schiff(e)</p>`;
             tooltip.innerHTML = html;
         } else {
-            tooltip.classList.add('hidden');
+            if (tooltip) tooltip.classList.add('hidden');
         }
 
-        this.canvas.style.cursor = this.hoveredCity ? 'pointer' : 'crosshair';
+        this.canvas.style.cursor = this.hoveredCity ? 'pointer' : 'grab';
     },
 
-    onClick(e) {
+    // --- Click handler (unified: ship click + city click) ---
+    handleClick(mx, my) {
+        // 1. Check ship click
+        const clickedShip = this.getShipAtScreen(mx, my);
+        if (clickedShip) {
+            this.selectedShip = clickedShip;
+            this.followingShip = true;
+            this.targetCamera.zoom = Utils.clamp(Math.max(this.targetCamera.zoom, 2.0), this.MIN_ZOOM, this.MAX_ZOOM);
+            return;
+        }
+
+        // 2. Check city click
+        this.updateHover(mx, my);
         if (this.hoveredCity) {
             this.selectCity(this.hoveredCity);
         }
     },
 
+    // --- Ship click detection ---
+    getShipAtScreen(mx, my) {
+        if (!this._lastGameState || !this._lastGameState.player) return null;
+        const t = this.animFrame;
+        for (const ship of this._lastGameState.player.ships) {
+            if (ship.status !== 'sailing' || !ship.route || ship.route.length < 2) continue;
+            const pos = this.getShipScreenPos(ship, t);
+            if (!pos) continue;
+            if (Utils.distance(mx, my, pos.x, pos.y) < 25) return ship;
+        }
+        return null;
+    },
+
     selectCity(cityId) {
         this.selectedCity = cityId;
+        this.followingShip = false;
         if (typeof UI !== 'undefined') {
             UI.onCitySelected(cityId);
         }
+    },
+
+    // --- Minimap ---
+    isInMinimap(sx, sy) {
+        const mx = 10, my = this.height - this.MINIMAP_H - 10;
+        return sx >= mx && sx <= mx + this.MINIMAP_W && sy >= my && sy <= my + this.MINIMAP_H;
+    },
+
+    onMinimapClick(sx, sy) {
+        const mx = 10, my = this.height - this.MINIMAP_H - 10;
+        const ms = this.MINIMAP_W / CONFIG.MAP_WIDTH;
+        this.targetCamera.x = Utils.clamp((sx - mx) / ms, 0, CONFIG.MAP_WIDTH);
+        this.targetCamera.y = Utils.clamp((sy - my) / ms, 0, CONFIG.MAP_HEIGHT);
+        this.followingShip = false;
+    },
+
+    renderMinimapBuffer() {
+        const ctx = this.minimapCtx;
+        const ms = this.MINIMAP_W / CONFIG.MAP_WIDTH;
+        ctx.clearRect(0, 0, this.MINIMAP_W, this.MINIMAP_H);
+
+        // Ocean
+        ctx.fillStyle = '#0a2840';
+        ctx.fillRect(0, 0, this.MINIMAP_W, this.MINIMAP_H);
+
+        // Draw land masses as filled polygons
+        ctx.fillStyle = '#2a5e2a';
+        const masses = this.getLandMasses();
+        masses.forEach(pts => {
+            if (pts.length < 3) return;
+            ctx.beginPath();
+            ctx.moveTo(pts[0][0] * ms, pts[0][1] * ms);
+            for (let i = 1; i < pts.length; i++) {
+                ctx.lineTo(pts[i][0] * ms, pts[i][1] * ms);
+            }
+            ctx.closePath();
+            ctx.fill();
+        });
+    },
+
+    drawMinimap(ctx, gameState) {
+        const mw = this.MINIMAP_W;
+        const mh = this.MINIMAP_H;
+        const mx = 10;
+        const my = this.height - mh - 10;
+        const ms = mw / CONFIG.MAP_WIDTH;
+
+        // Background
+        ctx.fillStyle = 'rgba(5, 20, 45, 0.85)';
+        ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 2);
+
+        // Pre-rendered land
+        if (this.minimapDirty) {
+            this.renderMinimapBuffer();
+            this.minimapDirty = false;
+        }
+        ctx.drawImage(this.minimapCanvas, mx, my);
+
+        // City dots
+        CITY_IDS.forEach(id => {
+            const city = CITIES_DATA[id];
+            const cx = mx + city.x * ms;
+            const cy = my + city.y * ms;
+            const r = city.importance >= 4 ? 2 : 1;
+            ctx.fillStyle = this.selectedCity === id ? '#ffd700' : '#c8b880';
+            ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        });
+
+        // Ship dots (bright blue for player, grey for AI)
+        if (gameState && gameState.player) {
+            gameState.player.ships.forEach(ship => {
+                let wx, wy;
+                if (ship.status === 'sailing') {
+                    const world = this.getShipWorldPos(ship);
+                    if (world) { wx = world.x; wy = world.y; }
+                } else if (ship.location) {
+                    const city = CITIES_DATA[ship.location];
+                    if (city) { wx = city.x; wy = city.y; }
+                }
+                if (wx !== undefined) {
+                    const isFollowed = this.selectedShip === ship && this.followingShip;
+                    ctx.fillStyle = isFollowed ? '#ffd700' : '#5dade2';
+                    ctx.beginPath();
+                    ctx.arc(mx + wx * ms, my + wy * ms, isFollowed ? 3 : 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        // Viewport rectangle
+        const tl = this.screenToWorld(0, 0);
+        const br = this.screenToWorld(this.width, this.height);
+        const vx = mx + Math.max(0, tl.x) * ms;
+        const vy = my + Math.max(0, tl.y) * ms;
+        const vw = Math.min(CONFIG.MAP_WIDTH, br.x) * ms - Math.max(0, tl.x) * ms;
+        const vh = Math.min(CONFIG.MAP_HEIGHT, br.y) * ms - Math.max(0, tl.y) * ms;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(vx, vy, Math.max(vw, 4), Math.max(vh, 4));
+
+        // Border
+        ctx.strokeStyle = 'rgba(180, 160, 110, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(mx - 1, my - 1, mw + 2, mh + 2);
+    },
+
+    // --- Route preview line ---
+    showRoutePreview(ship, targetCityId) {
+        this.routePreview = {
+            from: ship.location,
+            to: targetCityId,
+            timestamp: performance.now()
+        };
     }
 };
