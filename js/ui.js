@@ -863,6 +863,7 @@ const UI = {
             <div class="modal-buttons" style="flex-direction:column;gap:8px">
                 <button class="modal-btn primary" onclick="Game.save();UI.showNotification('Gespeichert!','success');UI.hideModal()">Spiel speichern</button>
                 <button class="modal-btn secondary" onclick="Sound.toggle();UI.hideModal();UI.showNotification(Sound.enabled?'Ton an':'Ton aus','info')">Ton ${Sound.enabled ? 'aus' : 'ein'}</button>
+                <button class="modal-btn secondary" onclick="UI.hideModal();Tutorial.reset();Tutorial.start()">Tutorial starten</button>
                 <button class="modal-btn danger" onclick="UI.hideModal();Game.returnToTitle()">Zum Hauptmenue</button>
                 <button class="modal-btn secondary" onclick="UI.hideModal()">Zurueck</button>
             </div>`;

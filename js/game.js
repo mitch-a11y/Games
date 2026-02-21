@@ -80,6 +80,7 @@ const Game = {
         // Initialize quests
         Quests.init(this.state);
 
+        this._isNewGame = true;
         this.start();
     },
 
@@ -106,6 +107,12 @@ const Game = {
 
         // Start game loop
         this.gameLoop();
+
+        // Offer tutorial for new games (not loads)
+        if (this._isNewGame) {
+            this._isNewGame = false;
+            setTimeout(() => Tutorial.offer(), 600);
+        }
     },
 
     gameLoop() {
