@@ -173,6 +173,7 @@ const EVENT_TEMPLATES = [
             if (cityState.playerBuildings && cityState.playerBuildings.length > 0 && Math.random() < 0.2) {
                 const idx = Utils.randInt(0, cityState.playerBuildings.length - 1);
                 const destroyed = cityState.playerBuildings.splice(idx, 1)[0];
+                Reputation.onBuildingDestroyed(gameState);
                 return `Stadtbrand in ${CITIES_DATA[cityId].displayName}! Ihr ${BUILDING_TYPES[destroyed.type].name} wurde zerstoert!`;
             }
 

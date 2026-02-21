@@ -57,17 +57,32 @@ const UI = {
             case 'fleet': this.updateFleetTab(); break;
             case 'build': this.updateBuildTab(); break;
             case 'quests': this.updateQuestsTab(); break;
+            case 'reputation': this.updateReputationTab(); break;
         }
     },
 
     // Update top bar
     updateTopBar(gameState) {
         document.getElementById('player-display').textContent = gameState.player.name;
-        document.getElementById('rank-display').textContent = gameState.player.rank;
         document.getElementById('date-display').textContent = Utils.formatDate(
             gameState.date.day, gameState.date.month, gameState.date.year
         );
         document.getElementById('gold-display').textContent = Utils.formatGold(gameState.player.gold);
+
+        // Reputation rank display with progress bar
+        const rank = Reputation.getRank(gameState);
+        const progress = Reputation.getProgressToNext(gameState);
+        const score = Reputation.getScore(gameState);
+        const nextRank = Reputation.getNextRank(gameState);
+        const progressPct = Math.round(progress * 100);
+
+        let rankHtml = `<span class="rank-icon">${rank.icon}</span>`;
+        rankHtml += `<span class="rank-name">${rank.displayName}</span>`;
+        rankHtml += `<span class="rank-rep-score">${Utils.formatNumber(score)}</span>`;
+        rankHtml += `<div class="rank-progress-mini" title="${nextRank ? `${Utils.formatNumber(score)} / ${Utils.formatNumber(nextRank.minRep)}` : 'Hoechster Rang!'}">`;
+        rankHtml += `<div class="rank-progress-mini-fill" style="width:${progressPct}%"></div></div>`;
+
+        document.getElementById('rank-display').innerHTML = rankHtml;
     },
 
     // === CITY TAB ===
@@ -604,10 +619,45 @@ const UI = {
             return;
         }
 
+        const maxShips = Reputation.getMaxShips(Game.state);
+        const currentShips = Game.state.player.ships.length;
+        const atLimit = currentShips >= maxShips;
+
         let html = '';
+        if (atLimit) {
+            html += `<p style="color:var(--warning);font-size:11px;margin-bottom:8px">Schiffslimit erreicht (${currentShips}/${maxShips}). Steigt im Rang auf fuer mehr Schiffe!</p>`;
+        } else {
+            html += `<p style="color:var(--text-dim);font-size:11px;margin-bottom:8px">Schiffe: ${currentShips}/${maxShips}</p>`;
+        }
+
         SHIP_TYPE_IDS.forEach(typeId => {
             const type = SHIP_TYPES[typeId];
+            const unlocked = Reputation.isShipUnlocked(Game.state, typeId);
             const canAfford = Game.state.player.gold >= type.cost;
+
+            if (!unlocked) {
+                // Show locked ship
+                const reqRank = REPUTATION_RANKS.find(r => r.unlockedShips.includes(typeId) &&
+                    !REPUTATION_RANKS[Reputation.getRankIndex(Game.state)].unlockedShips.includes(typeId));
+                html += `<div class="shipyard-item" style="opacity:0.5">
+                    <div class="shipyard-item-header">
+                        <span class="shipyard-item-name">\uD83D\uDD12 ${type.name}</span>
+                        <span class="shipyard-item-cost">${Utils.formatGold(type.cost)}</span>
+                    </div>
+                    <div class="shipyard-item-stats">
+                        Fracht: ${type.capacity} | Geschw: ${type.speed} | Rumpf: ${type.hull} | Kanonen: ${type.cannons}
+                        <br><span style="color:var(--warning)">Erfordert Rang: ${reqRank ? reqRank.displayName : '?'}</span>
+                    </div>
+                    <button class="shipyard-buy-btn" disabled>Gesperrt</button>
+                </div>`;
+                return;
+            }
+
+            const canBuy = canAfford && !atLimit;
+            let btnText = 'Kaufen';
+            if (atLimit) btnText = 'Limit erreicht';
+            else if (!canAfford) btnText = 'Zu teuer';
+
             html += `<div class="shipyard-item">
                 <div class="shipyard-item-header">
                     <span class="shipyard-item-name">${type.name}</span>
@@ -618,7 +668,7 @@ const UI = {
                     <br><span style="color:var(--text-dim)">${type.description}</span>
                 </div>
                 <button class="shipyard-buy-btn" onclick="UI.buyShip('${typeId}','${cityId}')"
-                    ${canAfford ? '' : 'disabled'}>${canAfford ? 'Kaufen' : 'Zu teuer'}</button>
+                    ${canBuy ? '' : 'disabled'}>${btnText}</button>
             </div>`;
         });
 
@@ -631,11 +681,23 @@ const UI = {
             this.showNotification('Nicht genug Gold!', 'warning');
             return;
         }
+        const maxShips = Reputation.getMaxShips(Game.state);
+        if (Game.state.player.ships.length >= maxShips) {
+            this.showNotification(`Schiffslimit erreicht (${maxShips})! Steigt im Rang auf.`, 'warning');
+            return;
+        }
+        if (!Reputation.isShipUnlocked(Game.state, typeId)) {
+            this.showNotification('Dieser Schiffstyp ist noch gesperrt!', 'warning');
+            return;
+        }
 
         Game.state.player.gold -= type.cost;
         const name = generateShipName();
         const ship = createShip(typeId, name, cityId);
         Game.state.player.ships.push(ship);
+
+        // Reputation gain for acquiring a ship
+        Reputation.onShipAcquired(Game.state);
 
         Sound.play('build');
         this.addLogMessage(`Neues Schiff "${name}" (${type.name}) in ${CITIES_DATA[cityId].displayName} gekauft!`, 'trade');
@@ -785,6 +847,129 @@ const UI = {
         Sound.play('gold');
     },
 
+    // === REPUTATION TAB ===
+    updateReputationTab() {
+        const panel = document.getElementById('reputation-list');
+        if (!panel || !Game.state || !Game.state.player.rep) {
+            if (panel) panel.innerHTML = '<p style="color:var(--text-dim)">Keine Reputationsdaten.</p>';
+            return;
+        }
+
+        const rep = Game.state.player.rep;
+        const rank = Reputation.getRank(Game.state);
+        const nextRank = Reputation.getNextRank(Game.state);
+        const progress = Reputation.getProgressToNext(Game.state);
+        const progressPct = Math.round(progress * 100);
+
+        let html = '';
+
+        // Current rank display
+        html += `<div class="rep-rank-display">
+            <div class="rep-rank-icon">${rank.icon}</div>
+            <div class="rep-rank-info">
+                <div class="rep-rank-name">${rank.displayName}</div>
+                <div class="rep-rank-desc">${rank.description}</div>
+            </div>
+        </div>`;
+
+        // Score and progress
+        html += `<div class="rep-score-section">
+            <div class="rep-score-row"><span>Reputation:</span><span style="color:var(--gold-color);font-weight:bold">${Utils.formatNumber(rep.score)}</span></div>`;
+        if (nextRank) {
+            html += `<div class="rep-score-row"><span>N\u00e4chster Rang:</span><span>${nextRank.displayName} (${Utils.formatNumber(nextRank.minRep)})</span></div>`;
+            html += `<div class="rep-progress-section">
+                <div class="progress-bar"><div class="progress-fill gold" style="width:${progressPct}%"></div></div>
+                <div class="rep-progress-label">${progressPct}%</div>
+            </div>`;
+        } else {
+            html += `<div class="rep-score-row"><span style="color:var(--gold-color)">H\u00f6chster Rang erreicht!</span></div>`;
+        }
+        html += '</div>';
+
+        // Rank benefits
+        html += '<div class="rep-benefits-section"><h4 class="rep-section-title">Rang-Vorteile</h4>';
+        html += `<div class="rep-benefit-row"><span>Handelspreise:</span><span style="color:var(--success)">${rank.priceDiscount > 0 ? '-' + Math.round(rank.priceDiscount * 100) + '%' : 'Keine'}</span></div>`;
+        html += `<div class="rep-benefit-row"><span>Wartungskosten:</span><span style="color:var(--success)">${rank.maintenanceDiscount > 0 ? '-' + Math.round(rank.maintenanceDiscount * 100) + '%' : 'Keine'}</span></div>`;
+        html += `<div class="rep-benefit-row"><span>Max. Schiffe:</span><span>${rank.maxShips}</span></div>`;
+        html += `<div class="rep-benefit-row"><span>Schiffstypen:</span><span>${rank.unlockedShips.map(id => SHIP_TYPES[id] ? SHIP_TYPES[id].name : id).join(', ')}</span></div>`;
+        html += '</div>';
+
+        // All ranks overview
+        html += '<div class="rep-ranks-overview"><h4 class="rep-section-title">Alle R\u00e4nge</h4>';
+        REPUTATION_RANKS.forEach((r, i) => {
+            const isCurrent = i === rep.rankIndex;
+            const isReached = i <= rep.rankIndex;
+            html += `<div class="rep-rank-row ${isCurrent ? 'current' : ''} ${isReached ? 'reached' : 'locked'}">
+                <span class="rep-rank-row-icon">${r.icon}</span>
+                <span class="rep-rank-row-name">${r.displayName}</span>
+                <span class="rep-rank-row-req">${Utils.formatNumber(r.minRep)} Rep</span>
+            </div>`;
+        });
+        html += '</div>';
+
+        // Reputation history
+        if (rep.history && rep.history.length > 0) {
+            html += '<div class="rep-history-section"><h4 class="rep-section-title">Letzte Ereignisse</h4>';
+            const shown = rep.history.slice(0, 15);
+            shown.forEach(entry => {
+                const amtClass = entry.amount > 0 ? 'rep-gain' : 'rep-loss';
+                const amtStr = entry.amount > 0 ? `+${entry.amount}` : `${entry.amount}`;
+                const dateStr = entry.date ? Utils.formatDateShort(entry.date.day, entry.date.month, entry.date.year) : '';
+                html += `<div class="rep-history-row">
+                    <span class="rep-history-date">${dateStr}</span>
+                    <span class="rep-history-text">${entry.text}</span>
+                    <span class="rep-history-amount ${amtClass}">${amtStr}</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        panel.innerHTML = html;
+    },
+
+    // Animated rank-up popup
+    showRepRankUp(oldRank, newRank) {
+        const unlocks = [];
+        if (newRank.maxShips > oldRank.maxShips) {
+            unlocks.push(`Max. Schiffe: ${newRank.maxShips}`);
+        }
+        const newShips = newRank.unlockedShips.filter(s => !oldRank.unlockedShips.includes(s));
+        if (newShips.length > 0) {
+            unlocks.push(`Neue Schiffe: ${newShips.map(id => SHIP_TYPES[id] ? SHIP_TYPES[id].name : id).join(', ')}`);
+        }
+        if (newRank.priceDiscount > oldRank.priceDiscount) {
+            unlocks.push(`Handelsrabatt: -${Math.round(newRank.priceDiscount * 100)}%`);
+        }
+        if (newRank.maintenanceDiscount > oldRank.maintenanceDiscount) {
+            unlocks.push(`Wartungsrabatt: -${Math.round(newRank.maintenanceDiscount * 100)}%`);
+        }
+
+        let unlocksHtml = '';
+        if (unlocks.length > 0) {
+            unlocksHtml = `<div class="rankup-unlocks">
+                <div class="rankup-unlocks-title">Freigeschaltet:</div>
+                ${unlocks.map(u => `<div class="rankup-unlock-item">\u2714 ${u}</div>`).join('')}
+            </div>`;
+        }
+
+        const html = `<div class="event-popup rankup-popup">
+            <div class="rankup-glow"></div>
+            <div class="rankup-icon">${newRank.icon}</div>
+            <h3 class="rankup-title">Befoerderung!</h3>
+            <div class="rankup-transition">
+                <span class="rankup-old">${oldRank.displayName}</span>
+                <span class="rankup-arrow">\u279C</span>
+                <span class="rankup-new">${newRank.displayName}</span>
+            </div>
+            <div class="rankup-desc">${newRank.description}</div>
+            ${unlocksHtml}
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="UI.hideModal()">Vortrefflich!</button>
+            </div>
+        </div>`;
+        this.showModal(html);
+    },
+
     // === WIND ===
     updateWind(gameState) {
         const directions = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'];
@@ -852,13 +1037,17 @@ const UI = {
         const daysPlayed = Game.state.player.daysPlayed;
         const shipsOwned = Game.state.player.ships.length;
         const totalTraded = Game.state.player.totalTraded || 0;
+        const repScore = Reputation.getScore(Game.state);
+        const rank = Reputation.getRank(Game.state);
 
         const html = `<h3>Spielmenue</h3>
             <div style="font-size:12px;margin-bottom:16px;padding:10px;background:rgba(15,52,96,0.3);border-radius:4px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Rang:</span><span style="color:var(--accent)">${rank.icon} ${rank.displayName}</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Reputation:</span><span style="color:var(--gold-color)">${Utils.formatNumber(repScore)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Vermoegen:</span><span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Handelsvolumen:</span><span>${Utils.formatGold(totalTraded)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Tage gespielt:</span><span>${daysPlayed}</span></div>
-                <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}</span></div>
+                <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}/${Reputation.getMaxShips(Game.state)}</span></div>
             </div>
             <div class="modal-buttons" style="flex-direction:column;gap:8px">
                 <button class="modal-btn primary" onclick="Game.save();UI.showNotification('Gespeichert!','success');UI.hideModal()">Spiel speichern</button>
@@ -871,15 +1060,10 @@ const UI = {
     },
 
     showRankUp(oldRank, newRank) {
-        const html = `<div class="event-popup">
-            <div class="event-icon">\uD83C\uDFC5</div>
-            <h3>Befoerderung!</h3>
-            <div class="event-text">Ihr wurdet vom ${oldRank} zum <strong style="color:var(--accent)">${newRank}</strong> befoerdert!</div>
-            <div class="modal-buttons">
-                <button class="modal-btn primary" onclick="UI.hideModal()">Vortrefflich!</button>
-            </div>
-        </div>`;
-        this.showModal(html);
-        Sound.play('newgame');
+        // Legacy wrapper - redirect to new reputation rank-up display
+        this.showRepRankUp(
+            { displayName: oldRank, icon: '', maxShips: 3, priceDiscount: 0, maintenanceDiscount: 0, unlockedShips: [] },
+            { displayName: newRank, icon: '\uD83C\uDFC5', description: '', maxShips: 3, priceDiscount: 0, maintenanceDiscount: 0, unlockedShips: [] }
+        );
     }
 };

@@ -80,6 +80,9 @@ const Game = {
         // Initialize quests
         Quests.init(this.state);
 
+        // Initialize reputation system
+        Reputation.init(this.state);
+
         this._isNewGame = true;
         this.start();
     },
@@ -197,6 +200,7 @@ const Game = {
         if (this.state.player.daysPlayed % 5 === 0) {
             const completed = Quests.checkQuests(this.state);
             completed.forEach(quest => {
+                Reputation.onQuestComplete(this.state, quest);
                 UI.addLogMessage(`Auftrag abgeschlossen: ${quest.name} - ${quest.rewardText} erhalten!`, 'event');
                 UI.showQuestComplete(quest);
             });
@@ -272,6 +276,9 @@ const Game = {
         // Track city visit for quests
         Quests.trackCityVisit(this.state, dest);
 
+        // Track city visit for reputation (first visit bonus)
+        Reputation.onCityVisit(this.state, dest);
+
         UI.addLogMessage(`${ship.name} ist in ${CITIES_DATA[dest].displayName} angekommen.`, 'info');
         Sound.play('arrive');
 
@@ -282,20 +289,27 @@ const Game = {
     },
 
     monthlyUpdate() {
-        // Maintenance costs
-        const shipMaintenance = this.state.player.ships.reduce(
+        // Maintenance costs (with reputation discount)
+        const maintenanceDiscount = Reputation.getMaintenanceDiscount(this.state);
+        const rawShipMaint = this.state.player.ships.reduce(
             (sum, s) => sum + s.maintenance, 0
         );
-        const buildingMaintenance = Buildings.getMaintenanceCost(this.state);
+        const rawBuildingMaint = Buildings.getMaintenanceCost(this.state);
+        const shipMaintenance = Math.round(rawShipMaint * (1 - maintenanceDiscount));
+        const buildingMaintenance = Math.round(rawBuildingMaint * (1 - maintenanceDiscount));
         const totalMaintenance = shipMaintenance + buildingMaintenance;
 
         if (totalMaintenance > 0) {
             this.state.player.gold -= totalMaintenance;
+            const discountText = maintenanceDiscount > 0 ? ` (${Math.round(maintenanceDiscount * 100)}% Rang-Rabatt)` : '';
             UI.addLogMessage(
-                `Monatliche Kosten: ${Utils.formatGold(totalMaintenance)} (Schiffe: ${shipMaintenance}, Gebaeude: ${buildingMaintenance})`,
+                `Monatliche Kosten: ${Utils.formatGold(totalMaintenance)} (Schiffe: ${shipMaintenance}, Gebaeude: ${buildingMaintenance})${discountText}`,
                 'info'
             );
         }
+
+        // Reputation monthly check (bankruptcy, gold milestones)
+        Reputation.onMonthlyCheck(this.state);
 
         // Population growth in cities
         CITY_IDS.forEach(cityId => {
@@ -334,18 +348,11 @@ const Game = {
     },
 
     checkRankUp() {
-        const player = this.state.player;
-        const wealth = this.calculateNetWorth();
-
-        for (let i = CONFIG.RANKS.length - 1; i >= 0; i--) {
-            if (wealth >= CONFIG.RANKS[i].minWealth && i > player.rankIndex) {
-                const oldRank = player.rank;
-                player.rankIndex = i;
-                player.rank = CONFIG.RANKS[i].name;
-                UI.showRankUp(oldRank, player.rank);
-                UI.addLogMessage(`Befoerderung! Ihr seid jetzt ${player.rank}!`, 'event');
-                break;
-            }
+        const result = Reputation.checkRankUp(this.state);
+        if (result.promoted) {
+            UI.showRepRankUp(result.oldRank, result.newRank);
+            UI.addLogMessage(`Befoerderung! Ihr seid jetzt ${result.newRank.displayName}!`, 'event');
+            Sound.play('newgame');
         }
     },
 
@@ -418,6 +425,7 @@ const Game = {
             });
             if (!this.state.player.totalTraded) this.state.player.totalTraded = 0;
             Quests.migrate(this.state);
+            Reputation.migrate(this.state);
             this.start();
             return true;
         } catch (e) {
