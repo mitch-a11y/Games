@@ -171,13 +171,19 @@ const Game = {
             UI.updateWind(this.state);
         }
 
-        // Check events
+        // Check events (skip if combat is active)
         this.state.eventCooldown--;
-        if (this.state.eventCooldown <= 0 && this.state.date.day % CONFIG.EVENT_CHECK_INTERVAL === 0) {
+        if (!Combat.active && this.state.eventCooldown <= 0 && this.state.date.day % CONFIG.EVENT_CHECK_INTERVAL === 0) {
             const events = Events.checkEvents(this.state);
             events.forEach(evt => {
+                // Combat events are handled by the Combat system (modal already shown)
+                if (evt.template.type === 'combat' && Combat.active) {
+                    UI.addLogMessage(evt.message, 'danger');
+                    this.state.eventCooldown = 15;
+                    return;
+                }
                 UI.addLogMessage(evt.message, evt.template.type === 'combat' ? 'danger' : 'event');
-                if (evt.template.type === 'combat' || evt.template.id === 'plague' || evt.template.id === 'fire') {
+                if (evt.template.id === 'plague' || evt.template.id === 'fire') {
                     UI.showEventPopup(evt);
                     this.state.eventCooldown = 10;
                 }
