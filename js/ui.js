@@ -9,6 +9,8 @@ const UI = {
     selectedTradeShipIdx: 0,
     notifications: [],
     tradeQuantities: {}, // store qty per good for trade tab
+    tutorialStep: -1,    // -1 = inactive, 0+ = active step
+    tutorialDismissed: false,
 
     init() {
         // Tab switching
@@ -72,6 +74,10 @@ const UI = {
     // === CITY TAB ===
     onCitySelected(cityId) {
         GameMap.selectedCity = cityId;
+        // If there's a tutorial active, advance it
+        if (this.tutorialStep !== undefined && this.tutorialStep >= 0) {
+            this.advanceTutorial(cityId);
+        }
         this.switchTab('city');
         this.updateCityTab();
     },
@@ -114,6 +120,26 @@ const UI = {
         // Net worth
         const netWorth = Game.calculateNetWorth();
         html += this.detailRow('Vermoegen', `<span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span>`);
+
+        // === "SAIL HERE" quick navigation ===
+        const shipsElsewhere = Game.state.player.ships.filter(
+            s => s.location !== cityId && s.status === 'docked'
+        );
+        if (shipsElsewhere.length > 0) {
+            html += '<div style="margin:8px 0;padding:8px;background:rgba(15,52,96,0.5);border:1px solid var(--accent);border-radius:6px">';
+            html += '<div style="font-size:12px;color:var(--accent);margin-bottom:6px;font-weight:bold">Schiff hierher senden:</div>';
+            shipsElsewhere.forEach(ship => {
+                const from = CITIES_DATA[ship.location];
+                const route = findShortestPath(ship.location, cityId);
+                if (route) {
+                    const travelDays = route.distance * 3;
+                    html += `<button class="trade-btn buy" style="margin:2px;padding:5px 10px;font-size:11px;width:100%;text-align:left"
+                        onclick="UI.sailShip('${ship.id}','${cityId}');UI.switchTab('city')">
+                        ${ship.name} (${from.displayName}, ~${travelDays} Tage)</button>`;
+                }
+            });
+            html += '</div>';
+        }
 
         // Market overview with mini charts
         html += '<div class="city-goods-section"><h4>Marktpreise</h4>';
@@ -307,12 +333,34 @@ const UI = {
 
         if (result.success) {
             this.addLogMessage(result.message, 'trade');
+            // Visual feedback flash
+            if (action === 'sell' && result.revenue > 0) {
+                this.showTradeFlash(`+${Utils.formatGold(result.revenue)}`, 'success');
+            } else if (action === 'buy' && result.cost > 0) {
+                this.showTradeFlash(`-${Utils.formatGold(result.cost)}`, 'danger');
+            }
         } else {
             this.showNotification(result.message, 'warning');
         }
 
         this.updateTradeTab();
         this.updateTopBar(Game.state);
+    },
+
+    showTradeFlash(text, type) {
+        const goldEl = document.getElementById('gold-display');
+        if (goldEl) {
+            // Flash the gold display
+            goldEl.style.transition = 'transform 0.15s, color 0.15s';
+            goldEl.style.transform = 'scale(1.3)';
+            goldEl.style.color = type === 'success' ? '#27ae60' : '#e74c3c';
+            setTimeout(() => {
+                goldEl.style.transform = 'scale(1)';
+                goldEl.style.color = '';
+            }, 400);
+        }
+        // Floating text notification
+        this.showNotification(text, type === 'success' ? 'success' : 'warning');
     },
 
     sellAllCargo(shipId, cityId) {
@@ -409,6 +457,11 @@ const UI = {
             html = '<p style="color:var(--text-dim)">Keine Schiffe. Kaufe eines in einer Stadt mit Werft!</p>';
         }
 
+        // Hint for ship interaction
+        if (player.ships.length > 0 && !this.selectedShipId) {
+            html += '<p style="color:var(--accent);font-size:11px;margin-bottom:8px;font-style:italic">Klicke auf ein Schiff fuer Navigationsziele und Reparatur.</p>';
+        }
+
         player.ships.forEach(ship => {
             const type = SHIP_TYPES[ship.typeId];
             const cargoCount = getCargoCount(ship);
@@ -417,7 +470,10 @@ const UI = {
 
             let statusText = '';
             let statusClass = '';
-            if (ship.status === 'docked') {
+            if (ship.status === 'building') {
+                statusText = `Im Bau: ${ship.constructionDays} Tage (${CITIES_DATA[ship.location] ? CITIES_DATA[ship.location].displayName : ''})`;
+                statusClass = 'sailing';
+            } else if (ship.status === 'docked') {
                 statusText = `Angedockt: ${CITIES_DATA[ship.location] ? CITIES_DATA[ship.location].displayName : ship.location}`;
                 statusClass = 'docked';
             } else if (ship.status === 'sailing') {
@@ -607,17 +663,18 @@ const UI = {
         SHIP_TYPE_IDS.forEach(typeId => {
             const type = SHIP_TYPES[typeId];
             const canAfford = Game.state.player.gold >= type.cost;
+            const costColor = canAfford ? 'var(--gold-color)' : 'var(--danger)';
             html += `<div class="shipyard-item">
                 <div class="shipyard-item-header">
                     <span class="shipyard-item-name">${type.name}</span>
-                    <span class="shipyard-item-cost">${Utils.formatGold(type.cost)}</span>
+                    <span class="shipyard-item-cost" style="color:${costColor}">${Utils.formatGold(type.cost)}</span>
                 </div>
                 <div class="shipyard-item-stats">
                     Fracht: ${type.capacity} | Geschw: ${type.speed} | Rumpf: ${type.hull} | Kanonen: ${type.cannons}
                     <br><span style="color:var(--text-dim)">${type.description}</span>
                 </div>
                 <button class="shipyard-buy-btn" onclick="UI.buyShip('${typeId}','${cityId}')"
-                    ${canAfford ? '' : 'disabled'}>${canAfford ? 'Kaufen' : 'Zu teuer'}</button>
+                    ${canAfford ? '' : 'disabled'} style="${canAfford ? '' : 'opacity:0.5'}">Kaufen</button>
             </div>`;
         });
 
@@ -634,11 +691,23 @@ const UI = {
         Game.state.player.gold -= type.cost;
         const name = generateShipName();
         const ship = createShip(typeId, name, cityId);
+
+        // Construction time based on ship size
+        const buildDays = typeId === 'small_cog' ? 7
+            : typeId === 'cog' ? 12
+            : typeId === 'hulk' ? 20
+            : typeId === 'caravel' ? 18
+            : typeId === 'carrack' ? 30
+            : typeId === 'warship' ? 25
+            : 15;
+        ship.constructionDays = buildDays;
+        ship.status = 'building';
+
         Game.state.player.ships.push(ship);
 
         Sound.play('build');
-        this.addLogMessage(`Neues Schiff "${name}" (${type.name}) in ${CITIES_DATA[cityId].displayName} gekauft!`, 'trade');
-        this.showNotification(`${type.name} "${name}" erworben!`, 'success');
+        this.addLogMessage(`Bau von "${name}" (${type.name}) in ${CITIES_DATA[cityId].displayName} begonnen! (${buildDays} Tage)`, 'trade');
+        this.showNotification(`${type.name} "${name}" wird gebaut!`, 'success');
         this.updateFleetTab();
         this.updateTopBar(Game.state);
     },
@@ -663,12 +732,19 @@ const UI = {
             html += '<h4 style="color:var(--text-dim);font-size:11px;text-transform:uppercase;margin-bottom:6px">Eure Gebaeude</h4>';
             cityState.playerBuildings.forEach(b => {
                 const type = BUILDING_TYPES[b.type];
-                html += `<div class="build-item" style="border-color:var(--success)">
+                const underConstruction = b.constructionDays > 0;
+                const borderColor = underConstruction ? 'var(--warning)' : 'var(--success)';
+                const statusText = underConstruction
+                    ? (b.pendingUpgrade ? `Ausbau: ${b.constructionDays} Tage` : `Bau: ${b.constructionDays} Tage`)
+                    : `Stufe ${b.level}`;
+                const statusColor = underConstruction ? 'var(--warning)' : 'var(--text-dim)';
+                html += `<div class="build-item" style="border-color:${borderColor}">
                     <div class="build-item-header">
                         <span class="build-item-name">${type.icon} ${type.name}</span>
-                        <span style="color:var(--text-dim);font-size:11px">Stufe ${b.level}</span>
+                        <span style="color:${statusColor};font-size:11px">${statusText}</span>
                     </div>
                     <div class="build-item-desc">${type.effect}</div>
+                    ${underConstruction ? `<div style="margin:4px 0"><div style="background:var(--bg-dark);border-radius:3px;height:6px;overflow:hidden"><div style="background:var(--warning);height:100%;width:${Math.max(5, 100 - b.constructionDays * 3)}%;transition:width 0.3s"></div></div></div>` : ''}
                     <div style="font-size:10px;color:var(--text-dim)">Unterhalt: ${type.maintenance * b.level} G/Monat</div>
                 </div>`;
             });
@@ -686,14 +762,15 @@ const UI = {
 
         available.forEach(item => {
             const canAfford = Game.state.player.gold >= item.cost;
+            const costColor = canAfford ? 'var(--gold-color)' : 'var(--danger)';
             html += `<div class="build-item">
                 <div class="build-item-header">
                     <span class="build-item-name">${item.type.icon} ${item.isUpgrade ? 'Ausbau: ' : ''}${item.type.name}</span>
-                    <span class="build-item-cost">${Utils.formatGold(item.cost)}</span>
+                    <span class="build-item-cost" style="color:${costColor}">${Utils.formatGold(item.cost)}</span>
                 </div>
                 <div class="build-item-desc">${item.type.description}<br><em style="color:var(--text-dim)">${item.type.effect}</em></div>
                 <button class="build-buy-btn" onclick="UI.buildBuilding('${cityId}','${item.typeId}')"
-                    ${canAfford ? '' : 'disabled'}>${item.isUpgrade ? 'Ausbauen' : (canAfford ? 'Bauen' : 'Zu teuer')}</button>
+                    ${canAfford ? '' : 'disabled'} style="${canAfford ? '' : 'opacity:0.5'}">${item.isUpgrade ? 'Ausbauen' : 'Bauen'}</button>
             </div>`;
         });
 
@@ -808,5 +885,83 @@ const UI = {
         </div>`;
         this.showModal(html);
         Sound.play('newgame');
+    },
+
+    // === TUTORIAL SYSTEM ===
+    startTutorial() {
+        this.tutorialStep = 0;
+        this.tutorialDismissed = false;
+        this.showTutorialStep();
+    },
+
+    tutorialSteps: [
+        {
+            title: 'Willkommen bei der Hanse!',
+            text: 'Ihr seid ein Kaufmann in eurer Heimatstadt. Lasst uns euren ersten Handel machen!<br><br><strong>Schritt 1:</strong> Schaut euch die Marktpreise im Stadt-Tab an. Guenstige Waren sind <span style="color:var(--success)">gruen</span> markiert.',
+            action: 'Schaue die Preise an'
+        },
+        {
+            title: 'Waren einkaufen',
+            text: '<strong>Schritt 2:</strong> Wechselt zum <strong>Handel-Tab</strong> und kauft guenstige Waren ein. Tipp: Waren, die hier produziert werden, sind billig! Kauft davon mit den +1, +5 oder Max-Buttons.',
+            action: 'Wechsle zum Handel-Tab',
+            tab: 'trade'
+        },
+        {
+            title: 'Ziel waehlen und segeln',
+            text: '<strong>Schritt 3:</strong> Jetzt muesst ihr segeln! Es gibt zwei Wege:<br>1. <strong>Klickt auf eine andere Stadt</strong> in der Karte - dort erscheint ein "Schiff hierher senden"-Button.<br>2. Oder geht zum <strong>Flotte-Tab</strong>, klickt euer Schiff an, und waehlt ein Ziel.<br><br>Tipp: Verkauft eure Waren in Staedten, die sie nicht produzieren!',
+            action: 'Segelt zu einer anderen Stadt'
+        },
+        {
+            title: 'Waren verkaufen',
+            text: '<strong>Schritt 4:</strong> Wenn euer Schiff ankommt, wechselt zum <strong>Handel-Tab</strong> und verkauft eure Waren. Waren die hier gebraucht werden kosten mehr - das ist euer Gewinn!',
+            action: 'Verkauft eure Waren'
+        },
+        {
+            title: 'Geschafft!',
+            text: 'Sehr gut! Ihr kennt jetzt die Grundlagen des Hansehandels.<br><br><strong>Weitere Tipps:</strong><ul style="text-align:left;margin:8px 0"><li>Baut Gebaeude im <strong>Bauen-Tab</strong> fuer Produktion</li><li>Kauft groessere Schiffe in Staedten mit Werft</li><li>Beachtet den Wind - er beeinflusst die Reisezeit</li><li>Steigt im Rang auf, indem ihr Vermoegen anhaeuft</li></ul>',
+            action: 'Viel Erfolg!'
+        }
+    ],
+
+    showTutorialStep() {
+        if (this.tutorialStep < 0 || this.tutorialStep >= this.tutorialSteps.length) return;
+        const step = this.tutorialSteps[this.tutorialStep];
+        const isLast = this.tutorialStep === this.tutorialSteps.length - 1;
+        const html = `<div class="event-popup">
+            <div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">
+                Tutorial (${this.tutorialStep + 1}/${this.tutorialSteps.length})
+            </div>
+            <h3>${step.title}</h3>
+            <div class="event-text" style="text-align:left;line-height:1.5">${step.text}</div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="UI.nextTutorialStep()">${isLast ? 'Tutorial beenden' : 'Weiter'}</button>
+                ${!isLast ? '<button class="modal-btn secondary" onclick="UI.dismissTutorial()">Tutorial beenden</button>' : ''}
+            </div>
+        </div>`;
+        this.showModal(html);
+    },
+
+    nextTutorialStep() {
+        this.tutorialStep++;
+        if (this.tutorialStep >= this.tutorialSteps.length) {
+            this.tutorialStep = -1;
+            this.tutorialDismissed = true;
+            this.hideModal();
+            return;
+        }
+        this.showTutorialStep();
+    },
+
+    dismissTutorial() {
+        this.tutorialStep = -1;
+        this.tutorialDismissed = true;
+        this.hideModal();
+    },
+
+    advanceTutorial(cityId) {
+        // Auto-advance tutorial when player clicks a different city
+        if (this.tutorialStep === 2 && cityId !== Game.state.player.homeCity) {
+            // Player clicked another city - good!
+        }
     }
 };

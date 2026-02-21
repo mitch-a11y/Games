@@ -16,7 +16,11 @@ const Trading = {
             const production = city.production[goodId] || 0;
             const demand = city.demand[goodId] || 0;
 
+            // Ensure minimum stock based on demand (cities always have some trade goods)
             let stock = production * 20 + Utils.randInt(5, 30);
+            if (demand > 0 && stock < demand * 15) {
+                stock = demand * 15 + Utils.randInt(5, 15);
+            }
 
             let priceMod = 1.0;
             if (production > 0) priceMod -= production * 0.08;
@@ -120,27 +124,68 @@ const Trading = {
         const market = cityState.market[goodId];
         const player = gameState.player;
 
+        // Limit purchase to 70% of current stock to prevent market manipulation
+        const maxBuyableStock = Math.floor(market.stock * 0.7);
         const maxAffordable = Math.floor(player.gold / market.price);
-        const maxStock = Math.floor(market.stock);
         const maxCapacity = getRemainingCapacity(ship);
-        const actual = Math.min(amount, maxAffordable, maxStock, maxCapacity);
+        const actual = Math.min(amount, maxAffordable, maxBuyableStock, maxCapacity);
 
-        if (actual <= 0) return { success: false, message: 'Kauf nicht moeglich.' };
+        if (actual <= 0) {
+            if (market.stock > 0 && market.stock <= 2) {
+                return { success: false, message: 'Zu wenig Vorrat - die Stadt behaelt eine Reserve.' };
+            }
+            return { success: false, message: 'Kauf nicht moeglich.' };
+        }
 
-        const cost = actual * market.price;
-        player.gold -= cost;
+        // Price increases dynamically with bulk buys (larger purchases cost more per unit)
+        let totalCost = 0;
+        let remaining = actual;
+        let tempStock = market.stock;
+        while (remaining > 0) {
+            const batch = Math.min(remaining, 5);
+            const supplyRatio = tempStock / Math.max(1, market.demand * 20 + 10);
+            const priceMul = supplyRatio < 0.5 ? 1 + (0.5 - supplyRatio) * 0.5 : 1;
+            totalCost += batch * Math.round(market.price * priceMul);
+            tempStock -= batch;
+            remaining -= batch;
+        }
+
+        if (totalCost > player.gold) {
+            // Recalculate with what we can afford
+            const affordable = Math.min(actual, Math.floor(player.gold / market.price));
+            if (affordable <= 0) return { success: false, message: 'Nicht genug Gold.' };
+            totalCost = affordable * market.price;
+            market.stock -= affordable;
+            market.totalBought += affordable;
+            addCargo(ship, goodId, affordable);
+            player.gold -= totalCost;
+            player.totalTraded += totalCost;
+            market.stock = Math.max(0, market.stock);
+            // Track where goods were bought for exploit prevention
+            if (!ship._purchaseOrigin) ship._purchaseOrigin = {};
+            ship._purchaseOrigin[goodId] = cityId;
+            return {
+                success: true, amount: affordable, cost: totalCost,
+                message: `${affordable} ${GOODS[goodId].name} gekauft fuer ${Utils.formatGold(totalCost)}.`
+            };
+        }
+
+        player.gold -= totalCost;
         market.stock -= actual;
         market.totalBought += actual;
         addCargo(ship, goodId, actual);
-
         market.stock = Math.max(0, market.stock);
-        player.totalTraded += cost;
+        player.totalTraded += totalCost;
+
+        // Track purchase origin to prevent same-city exploit
+        if (!ship._purchaseOrigin) ship._purchaseOrigin = {};
+        ship._purchaseOrigin[goodId] = cityId;
 
         return {
             success: true,
             amount: actual,
-            cost: cost,
-            message: `${actual} ${GOODS[goodId].name} gekauft fuer ${Utils.formatGold(cost)}.`
+            cost: totalCost,
+            message: `${actual} ${GOODS[goodId].name} gekauft fuer ${Utils.formatGold(totalCost)}.`
         };
     },
 
@@ -155,18 +200,44 @@ const Trading = {
 
         if (actual <= 0) return { success: false, message: 'Verkauf nicht moeglich.' };
 
-        const revenue = actual * market.price;
-        player.gold += revenue;
+        // Penalty if selling in the same city where goods were bought (anti-exploit)
+        let pricePenalty = 1.0;
+        if (ship._purchaseOrigin && ship._purchaseOrigin[goodId] === cityId) {
+            pricePenalty = 0.7; // 30% penalty for same-city flip
+        }
+
+        // Price drops with bulk sells (flooding the market)
+        let totalRevenue = 0;
+        let remaining = actual;
+        let tempStock = market.stock;
+        while (remaining > 0) {
+            const batch = Math.min(remaining, 5);
+            const supplyRatio = tempStock / Math.max(1, market.demand * 20 + 10);
+            const priceMul = supplyRatio > 1.5 ? Math.max(0.5, 1 - (supplyRatio - 1.5) * 0.2) : 1;
+            totalRevenue += batch * Math.round(market.price * priceMul * pricePenalty);
+            tempStock += batch;
+            remaining -= batch;
+        }
+
+        player.gold += totalRevenue;
         market.stock += actual;
         market.totalSold += actual;
         removeCargo(ship, goodId, actual);
-        player.totalTraded += revenue;
+        player.totalTraded += totalRevenue;
+
+        // Clear purchase origin if all sold
+        if (ship._purchaseOrigin && (ship.cargo[goodId] || 0) === 0) {
+            delete ship._purchaseOrigin[goodId];
+        }
+
+        let msg = `${actual} ${GOODS[goodId].name} verkauft fuer ${Utils.formatGold(totalRevenue)}.`;
+        if (pricePenalty < 1) msg += ' (Preisabzug: gleicher Markt)';
 
         return {
             success: true,
             amount: actual,
-            revenue: revenue,
-            message: `${actual} ${GOODS[goodId].name} verkauft fuer ${Utils.formatGold(revenue)}.`
+            revenue: totalRevenue,
+            message: msg
         };
     },
 

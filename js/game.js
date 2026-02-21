@@ -101,6 +101,12 @@ const Game = {
         Sound.init();
         Sound.play('newgame');
 
+        // Start tutorial for new games (if not loading)
+        if (!this._isLoading) {
+            setTimeout(() => UI.startTutorial(), 1500);
+        }
+        this._isLoading = false;
+
         // Start game loop
         this.gameLoop();
     },
@@ -140,6 +146,12 @@ const Game = {
 
         // Update AI
         this.state.aiTraders.forEach(ai => AITrader.update(ai, this.state));
+
+        // Update building construction
+        this.updateConstruction();
+
+        // Update ship construction
+        this.updateShipConstruction();
 
         // Update markets (every 3 days)
         if (this.state.date.day % 3 === 0) {
@@ -259,6 +271,46 @@ const Game = {
         }
     },
 
+    updateConstruction() {
+        CITY_IDS.forEach(cityId => {
+            const cityState = this.state.cities[cityId];
+            if (!cityState || !cityState.playerBuildings) return;
+            cityState.playerBuildings.forEach(b => {
+                if (b.constructionDays > 0) {
+                    b.constructionDays--;
+                    if (b.constructionDays <= 0) {
+                        b.constructionDays = 0;
+                        if (b.pendingUpgrade) {
+                            b.level++;
+                            delete b.pendingUpgrade;
+                            UI.addLogMessage(`${BUILDING_TYPES[b.type].name} in ${CITIES_DATA[cityId].displayName} auf Stufe ${b.level} ausgebaut!`, 'trade');
+                            UI.showNotification(`${BUILDING_TYPES[b.type].icon} Ausbau fertig!`, 'success');
+                        } else {
+                            UI.addLogMessage(`${BUILDING_TYPES[b.type].name} in ${CITIES_DATA[cityId].displayName} fertiggestellt!`, 'trade');
+                            UI.showNotification(`${BUILDING_TYPES[b.type].icon} Bau abgeschlossen!`, 'success');
+                        }
+                        Sound.play('build');
+                    }
+                }
+            });
+        });
+    },
+
+    updateShipConstruction() {
+        this.state.player.ships.forEach(ship => {
+            if (ship.constructionDays > 0) {
+                ship.constructionDays--;
+                if (ship.constructionDays <= 0) {
+                    ship.constructionDays = 0;
+                    ship.status = 'docked';
+                    UI.addLogMessage(`${ship.name} (${SHIP_TYPES[ship.typeId].name}) ist fertiggestellt!`, 'trade');
+                    UI.showNotification(`Schiff "${ship.name}" fertig!`, 'success');
+                    Sound.play('build');
+                }
+            }
+        });
+    },
+
     monthlyUpdate() {
         // Maintenance costs
         const shipMaintenance = this.state.player.ships.reduce(
@@ -278,8 +330,13 @@ const Game = {
         // Population growth in cities
         CITY_IDS.forEach(cityId => {
             const cityState = this.state.cities[cityId];
-            const hasHospital = (cityState.playerBuildings || []).some(b => b.type === 'hospital');
-            const growthRate = CONFIG.POPULATION_GROWTH * (hasHospital ? 1.5 : 1);
+            const hasHospital = (cityState.playerBuildings || []).some(b => b.type === 'hospital' && !b.constructionDays);
+            const buildings = (cityState.playerBuildings || []).filter(b => !b.constructionDays);
+            const buildingCount = buildings.length;
+
+            // Buildings attract population: each completed building adds growth bonus
+            const buildingBonus = 1 + buildingCount * 0.15;
+            const growthRate = CONFIG.POPULATION_GROWTH * (hasHospital ? 2.0 : 1) * buildingBonus;
 
             // Growth depends on food supply
             const foodSupply = cityState.market.grain.stock + cityState.market.fish.stock;
@@ -291,15 +348,27 @@ const Game = {
                 cityState.population -= Math.floor(cityState.population * growthRate * 0.5);
             }
             cityState.population = Math.max(500, cityState.population);
+
+            // Buildings increase city demand (more buildings = more people = more demand)
+            if (buildingCount > 0) {
+                GOOD_IDS.forEach(goodId => {
+                    const m = cityState.market[goodId];
+                    // Each building adds a small permanent demand increase
+                    const demandBoost = buildingCount * 0.003;
+                    m.stock = Math.max(0, m.stock - demandBoost);
+                });
+            }
         });
 
-        // Building production income
+        // Building production income (only completed buildings)
         CITY_IDS.forEach(cityId => {
             const cityState = this.state.cities[cityId];
             if (!cityState.playerBuildings) return;
             cityState.playerBuildings.forEach(b => {
+                if (b.constructionDays > 0) return; // skip buildings under construction
                 if (b.produces && GOODS[b.produces]) {
-                    cityState.market[b.produces].stock += CONFIG.PRODUCTION_RATE * b.level * CONFIG.DAYS_PER_MONTH;
+                    // Higher production rate for more impact
+                    cityState.market[b.produces].stock += CONFIG.PRODUCTION_RATE * b.level * CONFIG.DAYS_PER_MONTH * 1.5;
                 }
             });
         });
@@ -395,6 +464,7 @@ const Game = {
                 });
             });
             if (!this.state.player.totalTraded) this.state.player.totalTraded = 0;
+            this._isLoading = true;
             this.start();
             return true;
         } catch (e) {

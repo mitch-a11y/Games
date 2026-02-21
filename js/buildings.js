@@ -155,15 +155,36 @@ const Buildings = {
                 if (!hasPrereq) return;
             }
 
-            // Check max level
             const existingOfType = existing.filter(b => b.type === typeId);
             const currentCount = existingOfType.length;
             const currentLevel = existingOfType.reduce((sum, b) => sum + b.level, 0);
 
+            // Skip buildings under construction
+            const underConstruction = existingOfType.some(b => b.constructionDays > 0);
+            if (underConstruction) return;
+
             if (typeId === 'kontor') {
                 // Only one kontor, upgradeable
                 if (currentCount > 0 && currentLevel >= type.maxLevel) return;
+            } else if (type.maxLevel === 1) {
+                // Single-build buildings (church, hospital) - skip if already built
+                if (currentCount > 0) return;
             } else {
+                // For upgradeable buildings: allow upgrade if below max level
+                if (currentCount > 0) {
+                    const bld = existingOfType[0];
+                    if (bld.level >= type.maxLevel) return;
+                    // Show as upgrade option
+                    available.push({
+                        typeId,
+                        type,
+                        isUpgrade: true,
+                        currentLevel: bld.level,
+                        cost: Math.floor(type.cost * (bld.level + 1) * 0.6)
+                    });
+                    return;
+                }
+                // Allow new builds up to limit
                 if (currentCount >= CONFIG.MAX_BUILDINGS_PER_TYPE) return;
             }
 
@@ -191,22 +212,32 @@ const Buildings = {
 
         const existing = cityState.playerBuildings.filter(b => b.type === typeId);
 
-        if (typeId === 'kontor' && existing.length > 0) {
-            // Upgrade kontor
-            const kontor = existing[0];
-            const cost = type.cost * (kontor.level + 1);
+        // Upgrade existing building (kontor or production buildings)
+        if (existing.length > 0 && (typeId === 'kontor' || type.maxLevel > 1)) {
+            const building = existing[0];
+            const cost = typeId === 'kontor'
+                ? type.cost * (building.level + 1)
+                : Math.floor(type.cost * (building.level + 1) * 0.6);
             if (player.gold < cost) return { success: false, message: 'Nicht genug Gold!' };
             player.gold -= cost;
-            kontor.level++;
+            // Construction time: 10 + 5 per level days
+            building.constructionDays = 10 + building.level * 5;
+            building.pendingUpgrade = true;
             return {
                 success: true,
-                message: `${type.name} in ${CITIES_DATA[cityId].displayName} auf Stufe ${kontor.level} ausgebaut!`
+                message: `Ausbau von ${type.name} in ${CITIES_DATA[cityId].displayName} begonnen! (${building.constructionDays} Tage)`
             };
         }
 
         // New building
         const cost = type.cost;
         if (player.gold < cost) return { success: false, message: 'Nicht genug Gold!' };
+
+        // Construction time based on building type
+        const constructionDays = typeId === 'kontor' ? 15
+            : typeId === 'church' ? 30
+            : typeId === 'hospital' ? 25
+            : 12;
 
         player.gold -= cost;
         cityState.playerBuildings.push({
@@ -215,7 +246,8 @@ const Buildings = {
             level: 1,
             produces: type.produces,
             storage: type.storage,
-            built: { day: gameState.date.day, month: gameState.date.month, year: gameState.date.year }
+            built: { day: gameState.date.day, month: gameState.date.month, year: gameState.date.year },
+            constructionDays: constructionDays
         });
 
         // Reputation boost
@@ -224,7 +256,7 @@ const Buildings = {
 
         return {
             success: true,
-            message: `${type.name} in ${CITIES_DATA[cityId].displayName} errichtet!`
+            message: `Bau von ${type.name} in ${CITIES_DATA[cityId].displayName} begonnen! (${constructionDays} Tage)`
         };
     },
 

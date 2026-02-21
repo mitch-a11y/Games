@@ -1025,28 +1025,31 @@ const GameMap = {
             }
         }
 
-        // Enhanced tooltip
+        // Compact hover tooltip
         const tooltip = document.getElementById('map-tooltip');
         if (this.hoveredCity && typeof Game !== 'undefined') {
             const city = CITIES_DATA[this.hoveredCity];
             const cityState = Game.state && Game.state.cities ? Game.state.cities[this.hoveredCity] : null;
             tooltip.classList.remove('hidden');
-            tooltip.style.left = Math.min(mx + 15, this.width - 230) + 'px';
-            tooltip.style.top = Math.min(my - 10, this.height - 120) + 'px';
+            // Better positioning: avoid edges
+            let tx = mx + 15;
+            let ty = my - 10;
+            if (tx + 200 > this.width) tx = mx - 210;
+            if (ty + 100 > this.height) ty = this.height - 105;
+            if (ty < 5) ty = 5;
+            tooltip.style.left = tx + 'px';
+            tooltip.style.top = ty + 'px';
 
-            let html = `<h4>${city.displayName}</h4>`;
-            html += `<p>${city.description}</p>`;
-            if (cityState) {
-                html += `<p>Einwohner: ${Utils.formatNumber(cityState.population)}</p>`;
-                // Show top produced goods
-                const produced = Object.entries(city.production).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]).slice(0,3);
-                if (produced.length > 0) {
-                    html += '<p>Produziert: ' + produced.map(([g]) => GOODS[g].icon).join(' ') + '</p>';
-                }
-            }
-            if (city.hasShipyard) html += '<p>&#9875; Werft</p>';
+            // Compact one-line format
+            let html = `<h4 style="margin:0 0 3px 0;font-size:13px">${city.displayName}</h4>`;
+            const parts = [];
+            if (cityState) parts.push(`${Utils.formatNumber(cityState.population)} Einw.`);
+            const produced = Object.entries(city.production).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]).slice(0,3);
+            if (produced.length > 0) parts.push(produced.map(([g]) => GOODS[g].icon).join(''));
+            if (city.hasShipyard) parts.push('&#9875;Werft');
             const docked = Game.state.player.ships.filter(s => s.location === this.hoveredCity);
-            if (docked.length > 0) html += `<p>&#9973; ${docked.length} Schiff(e)</p>`;
+            if (docked.length > 0) parts.push(`&#9973;${docked.length} Schiff(e)`);
+            html += `<p style="margin:0;font-size:11px;line-height:1.3">${parts.join(' | ')}</p>`;
             tooltip.innerHTML = html;
         } else {
             tooltip.classList.add('hidden');
@@ -1058,6 +1061,10 @@ const GameMap = {
     onClick(e) {
         if (this.hoveredCity) {
             this.selectCity(this.hoveredCity);
+        } else {
+            // Clicked on water - deselect tooltip
+            const tooltip = document.getElementById('map-tooltip');
+            tooltip.classList.add('hidden');
         }
     },
 
