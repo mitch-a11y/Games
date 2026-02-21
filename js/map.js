@@ -211,7 +211,7 @@ const GameMap = {
     // --- Camera system ---
     camera: { x: 600, y: 350, zoom: 1.0 },
     targetCamera: { x: 600, y: 350, zoom: 1.0 },
-    cameraSmoothing: 0.12,
+    cameraSmoothing: 0.08,
     MIN_ZOOM: 0.5,
     MAX_ZOOM: 4.0,
     baseScale: 1,
@@ -235,6 +235,11 @@ const GameMap = {
     MINIMAP_W: 160,
     MINIMAP_H: 94,
     minimapDragging: false,
+
+    // Background map image (replaces procedural terrain when loaded)
+    mapImage: null,
+    mapImageLoaded: false,
+    MAP_IMAGE_PATH: 'assets/map.png',
 
     // Land buffer cache tracking
     lastLandZoom: 1.0,
@@ -275,6 +280,17 @@ const GameMap = {
         this.minimapCanvas = document.createElement('canvas');
         this.minimapCanvas.width = this.MINIMAP_W;
         this.minimapCanvas.height = this.MINIMAP_H;
+        // Load background map image (optional - falls back to procedural rendering)
+        this.mapImage = new Image();
+        this.mapImage.onload = () => {
+            this.mapImageLoaded = true;
+            this.landDirty = true;
+            this.minimapDirty = true;
+        };
+        this.mapImage.onerror = () => {
+            this.mapImageLoaded = false;
+        };
+        this.mapImage.src = this.MAP_IMAGE_PATH;
         this.minimapCtx = this.minimapCanvas.getContext('2d');
         this.resize();
         window.addEventListener('resize', () => { this.resize(); this.landDirty = true; this.minimapDirty = true; });
@@ -471,56 +487,85 @@ const GameMap = {
         const month = gameState && gameState.date ? gameState.date.month : 6;
         const seasonDark = this._getSeasonalDarkness(month);
 
-        // Rich deep ocean gradient with seasonal tinting
-        const grad = ctx.createLinearGradient(0, 0, this.width * 0.3, this.height);
-        const sf = 1 - seasonDark * 0.3;
-        grad.addColorStop(0,   `rgb(${Math.round(5*sf)},${Math.round(20*sf)},${Math.round(45*sf)})`);
-        grad.addColorStop(0.2, `rgb(${Math.round(8*sf)},${Math.round(30*sf)},${Math.round(58*sf)})`);
-        grad.addColorStop(0.5, `rgb(${Math.round(12*sf)},${Math.round(42*sf)},${Math.round(78*sf)})`);
-        grad.addColorStop(0.8, `rgb(${Math.round(10*sf)},${Math.round(38*sf)},${Math.round(70*sf)})`);
-        grad.addColorStop(1,   `rgb(${Math.round(6*sf)},${Math.round(25*sf)},${Math.round(52*sf)})`);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, this.width, this.height);
+        if (this.mapImageLoaded) {
+            // --- MAP IMAGE MODE: Draw the custom map image as background ---
+            ctx.fillStyle = '#0a1e38';
+            ctx.fillRect(0, 0, this.width, this.height);
 
-        // Subtle radial depth: lighter center, darker edges (vignette on sea)
-        const vigR = Math.max(this.width, this.height) * 0.75;
-        const seaVig = ctx.createRadialGradient(
-            this.width * 0.5, this.height * 0.4, vigR * 0.2,
-            this.width * 0.5, this.height * 0.4, vigR
-        );
-        seaVig.addColorStop(0, 'rgba(20, 60, 100, 0.08)');
-        seaVig.addColorStop(1, 'rgba(2, 8, 20, 0.15)');
-        ctx.fillStyle = seaVig;
-        ctx.fillRect(0, 0, this.width, this.height);
+            // Draw map image fitted to world coordinate space
+            const topLeft = this.worldToScreen(0, 0);
+            const bottomRight = this.worldToScreen(CONFIG.MAP_WIDTH, CONFIG.MAP_HEIGHT);
+            const drawW = bottomRight.x - topLeft.x;
+            const drawH = bottomRight.y - topLeft.y;
+            ctx.drawImage(this.mapImage, topLeft.x, topLeft.y, drawW, drawH);
 
-        // Animated water
-        this.drawSea(ctx);
+            // Subtle seasonal tint over the map image
+            if (seasonDark > 0.2) {
+                ctx.fillStyle = `rgba(20, 30, 60, ${seasonDark * 0.15})`;
+                ctx.fillRect(0, 0, this.width, this.height);
+            }
 
-        // Wind current lines on water
-        this.drawWindCurrents(ctx, gameState);
+            // Wind current lines on water (lighter in image mode)
+            this.drawWindCurrents(ctx, gameState);
 
-        // Sea sparkles
-        this.drawSparkles(ctx);
+            // Clouds on top of image
+            this.drawClouds(ctx);
 
-        // Clouds (behind everything else, atmospheric)
-        this.drawClouds(ctx);
+            // Draw sea routes
+            this.drawRoutes(ctx, gameState);
+        } else {
+            // --- PROCEDURAL MODE: Original procedural rendering ---
+            // Rich deep ocean gradient with seasonal tinting
+            const grad = ctx.createLinearGradient(0, 0, this.width * 0.3, this.height);
+            const sf = 1 - seasonDark * 0.3;
+            grad.addColorStop(0,   `rgb(${Math.round(5*sf)},${Math.round(20*sf)},${Math.round(45*sf)})`);
+            grad.addColorStop(0.2, `rgb(${Math.round(8*sf)},${Math.round(30*sf)},${Math.round(58*sf)})`);
+            grad.addColorStop(0.5, `rgb(${Math.round(12*sf)},${Math.round(42*sf)},${Math.round(78*sf)})`);
+            grad.addColorStop(0.8, `rgb(${Math.round(10*sf)},${Math.round(38*sf)},${Math.round(70*sf)})`);
+            grad.addColorStop(1,   `rgb(${Math.round(6*sf)},${Math.round(25*sf)},${Math.round(52*sf)})`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, this.width, this.height);
 
-        // Draw sea routes
-        this.drawRoutes(ctx, gameState);
+            // Subtle radial depth: lighter center, darker edges (vignette on sea)
+            const vigR = Math.max(this.width, this.height) * 0.75;
+            const seaVig = ctx.createRadialGradient(
+                this.width * 0.5, this.height * 0.4, vigR * 0.2,
+                this.width * 0.5, this.height * 0.4, vigR
+            );
+            seaVig.addColorStop(0, 'rgba(20, 60, 100, 0.08)');
+            seaVig.addColorStop(1, 'rgba(2, 8, 20, 0.15)');
+            ctx.fillStyle = seaVig;
+            ctx.fillRect(0, 0, this.width, this.height);
 
-        // Pre-rendered land (smart cache invalidation based on zoom/pan)
-        const zoomChanged = Math.abs(this.camera.zoom - this.lastLandZoom) > 0.05;
-        const panChanged = Math.abs(this.camera.x - this.lastLandCameraX) > 5 ||
-                           Math.abs(this.camera.y - this.lastLandCameraY) > 5;
-        if (this.landDirty || zoomChanged || panChanged) {
-            this.renderLandToBuffer();
-            this.landDirty = false;
-            this.minimapDirty = true;
-            this.lastLandZoom = this.camera.zoom;
-            this.lastLandCameraX = this.camera.x;
-            this.lastLandCameraY = this.camera.y;
+            // Animated water
+            this.drawSea(ctx);
+
+            // Wind current lines on water
+            this.drawWindCurrents(ctx, gameState);
+
+            // Sea sparkles
+            this.drawSparkles(ctx);
+
+            // Clouds (behind everything else, atmospheric)
+            this.drawClouds(ctx);
+
+            // Draw sea routes
+            this.drawRoutes(ctx, gameState);
+
+            // Pre-rendered land (smart cache invalidation based on zoom/pan)
+            const zoomChanged = Math.abs(this.camera.zoom - this.lastLandZoom) > 0.05;
+            const panChanged = Math.abs(this.camera.x - this.lastLandCameraX) > 5 ||
+                               Math.abs(this.camera.y - this.lastLandCameraY) > 5;
+            if (this.landDirty || zoomChanged || panChanged) {
+                this.renderLandToBuffer();
+                this.landDirty = false;
+                this.minimapDirty = true;
+                this.lastLandZoom = this.camera.zoom;
+                this.lastLandCameraX = this.camera.x;
+                this.lastLandCameraY = this.camera.y;
+            }
+            ctx.drawImage(this.landCanvas, 0, 0);
         }
-        ctx.drawImage(this.landCanvas, 0, 0);
 
         // Ship wakes (behind ships)
         this.drawWakes(ctx);
@@ -2901,7 +2946,7 @@ const GameMap = {
         const worldBefore = this.screenToWorld(mx, my);
 
         // Adjust zoom (~15% per scroll step)
-        const zoomDelta = e.deltaY > 0 ? 0.85 : 1.18;
+        const zoomDelta = e.deltaY > 0 ? 0.94 : 1.06;
         this.targetCamera.zoom = Utils.clamp(
             this.targetCamera.zoom * zoomDelta,
             this.MIN_ZOOM, this.MAX_ZOOM
@@ -3006,7 +3051,7 @@ const GameMap = {
         const worldPos = this.screenToWorld(mx, my);
         this.targetCamera.x = worldPos.x;
         this.targetCamera.y = worldPos.y;
-        this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 1.8, this.MIN_ZOOM, this.MAX_ZOOM);
+        this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 1.4, this.MIN_ZOOM, this.MAX_ZOOM);
         this.followingShip = false;
     },
 
@@ -3021,10 +3066,10 @@ const GameMap = {
                 break;
             case '+':
             case '=':
-                this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 1.3, this.MIN_ZOOM, this.MAX_ZOOM);
+                this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 1.12, this.MIN_ZOOM, this.MAX_ZOOM);
                 break;
             case '-':
-                this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 0.77, this.MIN_ZOOM, this.MAX_ZOOM);
+                this.targetCamera.zoom = Utils.clamp(this.targetCamera.zoom * 0.89, this.MIN_ZOOM, this.MAX_ZOOM);
                 break;
             case 'Escape':
                 this.followingShip = false;
@@ -3171,23 +3216,28 @@ const GameMap = {
         const ms = this.MINIMAP_W / CONFIG.MAP_WIDTH;
         ctx.clearRect(0, 0, this.MINIMAP_W, this.MINIMAP_H);
 
-        // Ocean
-        ctx.fillStyle = '#0a2840';
-        ctx.fillRect(0, 0, this.MINIMAP_W, this.MINIMAP_H);
+        if (this.mapImageLoaded) {
+            // Draw the map image scaled to minimap
+            ctx.drawImage(this.mapImage, 0, 0, this.MINIMAP_W, this.MINIMAP_H);
+        } else {
+            // Ocean
+            ctx.fillStyle = '#0a2840';
+            ctx.fillRect(0, 0, this.MINIMAP_W, this.MINIMAP_H);
 
-        // Draw land masses as filled polygons
-        ctx.fillStyle = '#2a5e2a';
-        const masses = this.getLandMasses();
-        masses.forEach(pts => {
-            if (pts.length < 3) return;
-            ctx.beginPath();
-            ctx.moveTo(pts[0][0] * ms, pts[0][1] * ms);
-            for (let i = 1; i < pts.length; i++) {
-                ctx.lineTo(pts[i][0] * ms, pts[i][1] * ms);
-            }
-            ctx.closePath();
-            ctx.fill();
-        });
+            // Draw land masses as filled polygons
+            ctx.fillStyle = '#2a5e2a';
+            const masses = this.getLandMasses();
+            masses.forEach(pts => {
+                if (pts.length < 3) return;
+                ctx.beginPath();
+                ctx.moveTo(pts[0][0] * ms, pts[0][1] * ms);
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(pts[i][0] * ms, pts[i][1] * ms);
+                }
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
     },
 
     drawMinimap(ctx, gameState) {
