@@ -218,9 +218,12 @@ const Buildings = {
             built: { day: gameState.date.day, month: gameState.date.month, year: gameState.date.year }
         });
 
-        // Reputation boost
+        // City reputation boost
         if (!cityState.reputation) cityState.reputation = 0;
         cityState.reputation += typeId === 'church' ? 20 : 5;
+
+        // Player reputation boost
+        Reputation.onBuild(gameState, typeId, cityId);
 
         return {
             success: true,

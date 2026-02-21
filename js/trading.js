@@ -120,14 +120,18 @@ const Trading = {
         const market = cityState.market[goodId];
         const player = gameState.player;
 
-        const maxAffordable = Math.floor(player.gold / market.price);
+        // Apply reputation price discount (buy cheaper)
+        const discount = Reputation.getPriceDiscount(gameState);
+        const effectivePrice = Math.max(1, Math.round(market.price * (1 - discount)));
+
+        const maxAffordable = Math.floor(player.gold / effectivePrice);
         const maxStock = Math.floor(market.stock);
         const maxCapacity = getRemainingCapacity(ship);
         const actual = Math.min(amount, maxAffordable, maxStock, maxCapacity);
 
         if (actual <= 0) return { success: false, message: 'Kauf nicht moeglich.' };
 
-        const cost = actual * market.price;
+        const cost = actual * effectivePrice;
         player.gold -= cost;
         market.stock -= actual;
         market.totalBought += actual;
@@ -135,6 +139,9 @@ const Trading = {
 
         market.stock = Math.max(0, market.stock);
         player.totalTraded += cost;
+
+        // Reputation gain for trade
+        Reputation.onTrade(gameState, cost);
 
         return {
             success: true,
@@ -155,12 +162,19 @@ const Trading = {
 
         if (actual <= 0) return { success: false, message: 'Verkauf nicht moeglich.' };
 
-        const revenue = actual * market.price;
+        // Apply reputation price bonus (sell higher)
+        const discount = Reputation.getPriceDiscount(gameState);
+        const effectivePrice = Math.round(market.price * (1 + discount));
+
+        const revenue = actual * effectivePrice;
         player.gold += revenue;
         market.stock += actual;
         market.totalSold += actual;
         removeCargo(ship, goodId, actual);
         player.totalTraded += revenue;
+
+        // Reputation gain for trade
+        Reputation.onTrade(gameState, revenue);
 
         return {
             success: true,

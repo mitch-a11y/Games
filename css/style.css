@@ -709,7 +709,296 @@ html, body {
     font-size: 11px;
 }
 
-/* Reputation bar */
+/* === Reputation System === */
+
+/* Top-bar rank display */
+#rank-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+.rank-icon {
+    font-size: 16px;
+}
+.rank-name {
+    color: var(--accent);
+    font-weight: bold;
+    white-space: nowrap;
+}
+.rank-rep-score {
+    color: var(--text-dim);
+    font-size: 10px;
+}
+.rank-progress-mini {
+    width: 48px;
+    height: 4px;
+    background: var(--bg-medium);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.rank-progress-mini-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+/* Reputation Tab */
+#reputation-panel h3 {
+    color: var(--accent); margin-bottom: 12px;
+    font-family: var(--font-title);
+}
+
+.rep-rank-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(230, 168, 23, 0.08);
+    border: 1px solid var(--accent-dark);
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+.rep-rank-icon {
+    font-size: 36px;
+}
+.rep-rank-info {
+    flex: 1;
+}
+.rep-rank-name {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--accent);
+    font-family: var(--font-title);
+}
+.rep-rank-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+
+.rep-score-section {
+    padding: 8px;
+    background: rgba(15, 52, 96, 0.3);
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+.rep-score-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+}
+.rep-progress-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+.rep-progress-section .progress-bar {
+    flex: 1;
+}
+.rep-progress-label {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: bold;
+    min-width: 30px;
+    text-align: right;
+}
+
+.rep-section-title {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.rep-benefits-section {
+    padding: 8px;
+    background: rgba(15, 52, 96, 0.3);
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+.rep-benefit-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.rep-ranks-overview {
+    padding: 8px;
+    background: rgba(15, 52, 96, 0.3);
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+.rep-rank-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    margin-bottom: 2px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+.rep-rank-row.current {
+    background: rgba(230, 168, 23, 0.15);
+    border: 1px solid var(--accent-dark);
+}
+.rep-rank-row.reached {
+    color: var(--text-light);
+}
+.rep-rank-row.locked {
+    color: var(--text-dim);
+    opacity: 0.6;
+}
+.rep-rank-row-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+}
+.rep-rank-row-name {
+    flex: 1;
+    font-weight: bold;
+}
+.rep-rank-row-req {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.rep-history-section {
+    padding: 8px;
+    background: rgba(15, 52, 96, 0.3);
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+.rep-history-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 11px;
+    border-bottom: 1px solid rgba(51, 68, 102, 0.2);
+}
+.rep-history-date {
+    color: var(--text-dim);
+    font-size: 10px;
+    min-width: 48px;
+}
+.rep-history-text {
+    flex: 1;
+    color: var(--text);
+}
+.rep-history-amount {
+    font-weight: bold;
+    min-width: 40px;
+    text-align: right;
+}
+.rep-history-amount.rep-gain {
+    color: var(--success);
+}
+.rep-history-amount.rep-loss {
+    color: var(--danger);
+}
+
+/* Rank-up popup animation */
+.rankup-popup {
+    position: relative;
+    overflow: hidden;
+}
+.rankup-glow {
+    position: absolute;
+    top: -2px; left: -2px; right: -2px; bottom: -2px;
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    animation: rankupGlow 2s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes rankupGlow {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(230, 168, 23, 0.3), inset 0 0 10px rgba(230, 168, 23, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(230, 168, 23, 0.6), inset 0 0 20px rgba(230, 168, 23, 0.2);
+    }
+}
+.rankup-icon {
+    font-size: 56px;
+    text-align: center;
+    margin-bottom: 8px;
+    animation: rankupBounce 0.6s ease-out;
+}
+@keyframes rankupBounce {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+}
+.rankup-title {
+    font-family: var(--font-title);
+    font-size: 24px;
+    color: var(--accent);
+    text-align: center;
+    text-shadow: 0 0 20px rgba(230, 168, 23, 0.4);
+    margin-bottom: 12px;
+}
+.rankup-transition {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+.rankup-old {
+    color: var(--text-dim);
+}
+.rankup-arrow {
+    color: var(--accent);
+    font-size: 20px;
+    animation: rankupArrow 1s ease-in-out infinite;
+}
+@keyframes rankupArrow {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(4px); }
+}
+.rankup-new {
+    color: var(--accent);
+    font-weight: bold;
+    font-family: var(--font-title);
+    font-size: 18px;
+}
+.rankup-desc {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 12px;
+    font-style: italic;
+}
+.rankup-unlocks {
+    padding: 10px;
+    background: rgba(39, 174, 96, 0.1);
+    border: 1px solid var(--success);
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+.rankup-unlocks-title {
+    font-size: 12px;
+    color: var(--success);
+    font-weight: bold;
+    margin-bottom: 6px;
+    text-align: center;
+}
+.rankup-unlock-item {
+    font-size: 12px;
+    color: var(--text-light);
+    padding: 2px 0;
+    text-align: center;
+}
+
+/* Legacy reputation bar */
 .rep-bar-container {
     margin-top: 8px;
 }

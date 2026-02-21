@@ -30,14 +30,16 @@ const CONFIG = {
     CONSUMPTION_RATE: 0.02,   // goods consumed per pop per month
     PRODUCTION_RATE: 0.05,    // goods produced per building per day
 
-    // Player
+    // Player - legacy ranks kept for reference, reputation system now handles ranks
     RANKS: [
-        { name: 'Kaufgeselle', minWealth: 0 },
+        { name: 'Kr\u00e4mer', minWealth: 0 },
+        { name: 'H\u00e4ndler', minWealth: 5000 },
         { name: 'Kaufmann', minWealth: 15000 },
         { name: 'Fernkaufmann', minWealth: 50000 },
         { name: 'Ratsherr', minWealth: 150000 },
-        { name: 'Buergermeister', minWealth: 500000 },
-        { name: 'Eldermann', minWealth: 2000000 }
+        { name: 'Patrizier', minWealth: 500000 },
+        { name: 'B\u00fcrgermeister', minWealth: 1000000 },
+        { name: '\u00c4ltermann der Hanse', minWealth: 2000000 }
     ],
 
     // Difficulty modifiers
