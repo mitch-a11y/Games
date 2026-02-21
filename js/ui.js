@@ -56,6 +56,7 @@ const UI = {
             case 'trade': this.updateTradeTab(); break;
             case 'fleet': this.updateFleetTab(); break;
             case 'build': this.updateBuildTab(); break;
+            case 'quests': this.updateQuestsTab(); break;
         }
     },
 
@@ -711,6 +712,77 @@ const UI = {
         }
         this.updateBuildTab();
         this.updateTopBar(Game.state);
+    },
+
+    // === QUESTS TAB ===
+    updateQuestsTab() {
+        const panel = document.getElementById('quests-list');
+        if (!Game.state || !Game.state.quests) {
+            panel.innerHTML = '<p style="color:var(--text-dim)">Keine Auftraege verfuegbar.</p>';
+            return;
+        }
+
+        const active = Quests.getActiveQuests(Game.state);
+        const completed = Quests.getCompletedQuests(Game.state);
+
+        let html = '';
+
+        // Active quests
+        if (active.length > 0) {
+            html += '<h4 class="quests-section-title">Aktive Auftraege</h4>';
+            active.forEach(quest => {
+                const progress = quest.progressText ? quest.progressText(Game.state) : '';
+                html += `<div class="quest-card active">
+                    <div class="quest-header">
+                        <span class="quest-icon">${quest.icon}</span>
+                        <span class="quest-name">${quest.name}</span>
+                    </div>
+                    <div class="quest-desc">${quest.description}</div>
+                    ${progress ? `<div class="quest-progress"><div class="quest-progress-text">${progress}</div></div>` : ''}
+                    <div class="quest-reward">Belohnung: <span class="quest-reward-value">${quest.rewardText}</span></div>
+                </div>`;
+            });
+        }
+
+        // Completed quests
+        if (completed.length > 0) {
+            html += '<h4 class="quests-section-title" style="margin-top:16px">Abgeschlossen</h4>';
+            completed.forEach(quest => {
+                const data = Game.state.quests.completed[quest.id];
+                const dateStr = data.completedAt ? Utils.formatDate(data.completedAt.day, data.completedAt.month, data.completedAt.year) : '';
+                html += `<div class="quest-card completed">
+                    <div class="quest-header">
+                        <span class="quest-icon">${quest.icon}</span>
+                        <span class="quest-name">${quest.name}</span>
+                        <span class="quest-check">\u2714</span>
+                    </div>
+                    <div class="quest-desc">${quest.description}</div>
+                    <div class="quest-completed-info">${dateStr} \u2014 ${quest.rewardText} erhalten</div>
+                </div>`;
+            });
+        }
+
+        if (active.length === 0 && completed.length === 0) {
+            html = '<p style="color:var(--text-dim)">Keine Auftraege verfuegbar.</p>';
+        }
+
+        panel.innerHTML = html;
+    },
+
+    showQuestComplete(quest) {
+        const html = `<div class="event-popup">
+            <div class="event-icon">${quest.icon}</div>
+            <h3>Auftrag abgeschlossen!</h3>
+            <div class="event-text"><strong>${quest.name}</strong><br>${quest.description}</div>
+            <div style="margin:12px 0;padding:8px;background:rgba(39,174,96,0.15);border-radius:4px;border:1px solid var(--success)">
+                <span style="color:var(--success);font-weight:bold">Belohnung: ${quest.rewardText}</span>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="UI.hideModal()">Vortrefflich!</button>
+            </div>
+        </div>`;
+        this.showModal(html);
+        Sound.play('gold');
     },
 
     // === WIND ===
