@@ -20,6 +20,10 @@ const GameMap = {
     wakes: [],
     // Sea sparkle particles
     sparkles: [],
+    // Seagulls
+    seagulls: [],
+    // Clouds
+    clouds: [],
     // Compass rose rotation
     compassAngle: 0,
 
@@ -42,6 +46,45 @@ const GameMap = {
                 size: 0.5 + Math.random() * 1.5
             });
         }
+        // Seed seagulls
+        for (let i = 0; i < 8; i++) {
+            this.seagulls.push({
+                x: Math.random(),
+                y: Math.random() * 0.6,
+                speed: 0.0004 + Math.random() * 0.0006,
+                wingPhase: Math.random() * Math.PI * 2,
+                wingSpeed: 0.08 + Math.random() * 0.06,
+                size: 0.6 + Math.random() * 0.5,
+                dy: (Math.random() - 0.5) * 0.0002,
+                circlePhase: Math.random() * Math.PI * 2,
+                circleRadius: 0.005 + Math.random() * 0.01
+            });
+        }
+        // Seed clouds
+        for (let i = 0; i < 5; i++) {
+            this.clouds.push({
+                x: Math.random(),
+                y: 0.03 + Math.random() * 0.25,
+                speed: 0.00008 + Math.random() * 0.00012,
+                scale: 0.6 + Math.random() * 0.8,
+                opacity: 0.06 + Math.random() * 0.08,
+                blobs: this._generateCloudBlobs()
+            });
+        }
+    },
+
+    _generateCloudBlobs() {
+        const count = 3 + Math.floor(Math.random() * 4);
+        const blobs = [];
+        for (let i = 0; i < count; i++) {
+            blobs.push({
+                ox: (Math.random() - 0.5) * 40,
+                oy: (Math.random() - 0.5) * 12,
+                rx: 15 + Math.random() * 20,
+                ry: 8 + Math.random() * 8
+            });
+        }
+        return blobs;
     },
 
     resize() {
@@ -93,6 +136,9 @@ const GameMap = {
         // Sea sparkles
         this.drawSparkles(ctx);
 
+        // Clouds (behind everything else, atmospheric)
+        this.drawClouds(ctx);
+
         // Draw sea routes
         this.drawRoutes(ctx, gameState);
 
@@ -118,6 +164,9 @@ const GameMap = {
         if (this.hoveredCity) {
             this.drawCityHighlight(ctx, this.hoveredCity);
         }
+
+        // Seagulls (on top of everything, in the sky)
+        this.drawSeagulls(ctx);
 
         // Compass rose
         this.drawCompass(ctx, gameState);
@@ -541,72 +590,216 @@ const GameMap = {
 
     drawDetailedShip(ctx, x, y, angle, ship, hullColor, sailColor, isPlayer) {
         const t = this.animFrame;
-        const size = isPlayer ? 1.2 : 0.85;
+        const s = isPlayer ? 1.3 : 0.9;
 
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
 
-        // Hull shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        // --- Hull shadow on water ---
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
-        ctx.ellipse(1, 2, 10 * size, 3 * size, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 3 * s, 14 * s, 3.5 * s, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Hull
-        ctx.fillStyle = hullColor;
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        // --- Hansekogge Hull ---
+        // Kogge: high rounded hull, flat bottom, high stern and bow
+        const hullDark = isPlayer ? '#8b5e1a' : '#5a6570';
+        const hullMid = hullColor;
+        const hullLight = isPlayer ? '#c8922a' : '#8a96a0';
+
+        // Main hull body - wide, deep, flat-bottomed
+        ctx.beginPath();
+        ctx.moveTo(-12 * s, 0);                              // stern waterline
+        ctx.lineTo(-11 * s, 3 * s);                          // stern bottom
+        ctx.lineTo(-6 * s, 4.5 * s);                         // bottom curve
+        ctx.lineTo(6 * s, 4.5 * s);                          // flat bottom
+        ctx.lineTo(11 * s, 3 * s);                            // bow bottom
+        ctx.lineTo(14 * s, -1 * s);                           // bow rise (high)
+        ctx.lineTo(12 * s, -3 * s);                           // bow top (Vorderkastell)
+        ctx.lineTo(8 * s, -4 * s);                            // foredeck
+        ctx.lineTo(-6 * s, -4 * s);                           // main deck
+        ctx.lineTo(-10 * s, -5 * s);                          // stern rise (Achterkastell)
+        ctx.lineTo(-13 * s, -3 * s);                          // stern top
+        ctx.lineTo(-12 * s, 0);                               // back to stern waterline
+        ctx.closePath();
+        ctx.fillStyle = hullMid;
+        ctx.fill();
+        ctx.strokeStyle = hullDark;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        // Hull planking lines
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 0.4;
+        for (let i = 1; i <= 3; i++) {
+            const py = -4 * s + i * 2.2 * s;
+            ctx.beginPath();
+            ctx.moveTo(-11 * s, py);
+            ctx.lineTo(12 * s, py);
+            ctx.stroke();
+        }
+
+        // Stern castle (Achterkastell) - raised platform at rear
+        ctx.fillStyle = hullLight;
+        ctx.strokeStyle = hullDark;
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-6 * s, -4 * s);
+        ctx.lineTo(-6 * s, -7 * s);
+        ctx.lineTo(-12 * s, -7.5 * s);
+        ctx.lineTo(-13 * s, -5 * s);
+        ctx.lineTo(-10 * s, -5 * s);
+        ctx.lineTo(-6 * s, -4 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Stern castle railing
+        ctx.strokeStyle = hullDark;
         ctx.lineWidth = 0.5;
         ctx.beginPath();
-        ctx.moveTo(-9 * size, 0);
-        ctx.quadraticCurveTo(-7 * size, -4 * size, 0, -4 * size);
-        ctx.quadraticCurveTo(7 * size, -4 * size, 10 * size, 0);
-        ctx.quadraticCurveTo(7 * size, 4 * size, 0, 4 * size);
-        ctx.quadraticCurveTo(-7 * size, 4 * size, -9 * size, 0);
+        ctx.moveTo(-6 * s, -7 * s);
+        ctx.lineTo(-12 * s, -7.5 * s);
+        ctx.stroke();
+
+        // Bow rise / forecastle (Vorderkastell)
+        ctx.fillStyle = hullLight;
+        ctx.beginPath();
+        ctx.moveTo(8 * s, -4 * s);
+        ctx.lineTo(8 * s, -6 * s);
+        ctx.lineTo(13 * s, -5 * s);
+        ctx.lineTo(12 * s, -3 * s);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        // Bow (pointed front)
-        ctx.fillStyle = hullColor;
+        // Bowsprit (short spar at front)
+        ctx.strokeStyle = '#5c3a1e';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(8 * size, -2.5 * size);
-        ctx.lineTo(13 * size, 0);
-        ctx.lineTo(8 * size, 2.5 * size);
+        ctx.moveTo(12 * s, -4 * s);
+        ctx.lineTo(17 * s, -6 * s);
+        ctx.stroke();
+
+        // --- Mast (single tall center mast, characteristic of Kogge) ---
+        ctx.strokeStyle = '#5c3a1e';
+        ctx.lineWidth = 2 * s;
+        ctx.beginPath();
+        ctx.moveTo(1 * s, -4 * s);
+        ctx.lineTo(1 * s, -18 * s);
+        ctx.stroke();
+
+        // Crow's nest (Krähennest)
+        ctx.fillStyle = '#5c3a1e';
+        ctx.strokeStyle = '#3a2510';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-2 * s, -15 * s);
+        ctx.lineTo(4 * s, -15 * s);
+        ctx.lineTo(3.5 * s, -16 * s);
+        ctx.lineTo(-1.5 * s, -16 * s);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        // Mast
-        ctx.strokeStyle = '#543';
-        ctx.lineWidth = 1.5;
+        // Yard (horizontal beam for square sail)
+        ctx.strokeStyle = '#5c3a1e';
+        ctx.lineWidth = 1.2;
+        const yardY = -16 * s;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -10 * size);
+        ctx.moveTo(-8 * s, yardY);
+        ctx.lineTo(10 * s, yardY);
         ctx.stroke();
 
-        // Sail (flutters slightly)
-        const flutter = Math.sin(t * 0.1) * 1.2;
+        // --- Square Sail (Rahsegel) - the Kogge trademark ---
+        const flutter = Math.sin(t * 0.08) * 1.5 * s;
+        const flutter2 = Math.sin(t * 0.08 + 1) * 1.0 * s;
         ctx.fillStyle = sailColor;
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 0.92;
         ctx.beginPath();
-        ctx.moveTo(-1, -9 * size);
-        ctx.quadraticCurveTo(5 * size + flutter, -6 * size, 6 * size + flutter, -3 * size);
-        ctx.lineTo(-1, -2 * size);
+        ctx.moveTo(-7.5 * s, yardY);                            // top left
+        ctx.quadraticCurveTo(-6 * s + flutter2, -11 * s, -6 * s + flutter, -6 * s);  // left edge billows
+        ctx.lineTo(8 * s + flutter, -6 * s);                    // bottom right
+        ctx.quadraticCurveTo(8 * s + flutter2, -11 * s, 9.5 * s, yardY);   // right edge
         ctx.closePath();
         ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.6;
         ctx.stroke();
+
+        // Cross on sail (Hanseatic red cross)
+        if (isPlayer) {
+            ctx.strokeStyle = '#b02020';
+            ctx.lineWidth = 1.8 * s;
+            ctx.globalAlpha = 0.7;
+            const crossCx = 1 * s + flutter * 0.3;
+            const crossCy = -11 * s;
+            ctx.beginPath();
+            ctx.moveTo(crossCx, -14.5 * s);
+            ctx.lineTo(crossCx, -7.5 * s);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(crossCx - 4 * s, crossCy);
+            ctx.lineTo(crossCx + 4 * s, crossCy);
+            ctx.stroke();
+        }
         ctx.globalAlpha = 1;
 
-        // Flag at top of mast
+        // Rigging lines (shrouds)
+        ctx.strokeStyle = 'rgba(90, 60, 30, 0.35)';
+        ctx.lineWidth = 0.4;
+        // Left shroud
+        ctx.beginPath();
+        ctx.moveTo(-6 * s, -4 * s);
+        ctx.lineTo(1 * s, -15 * s);
+        ctx.stroke();
+        // Right shroud
+        ctx.beginPath();
+        ctx.moveTo(8 * s, -4 * s);
+        ctx.lineTo(1 * s, -15 * s);
+        ctx.stroke();
+
+        // Sheet lines from sail bottom to deck
+        ctx.strokeStyle = 'rgba(90, 60, 30, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(-6 * s + flutter, -6 * s);
+        ctx.lineTo(-5 * s, -4 * s);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(8 * s + flutter, -6 * s);
+        ctx.lineTo(7 * s, -4 * s);
+        ctx.stroke();
+
+        // --- Rudder (Steuerruder, at stern) ---
+        ctx.strokeStyle = '#5c3a1e';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-13 * s, -2 * s);
+        ctx.lineTo(-15 * s, 2 * s);
+        ctx.lineTo(-14 * s, 5 * s);
+        ctx.stroke();
+
+        // --- Flag at masthead ---
         if (isPlayer) {
+            const flagFlutter = Math.sin(t * 0.15) * 1.5;
             ctx.fillStyle = '#c0392b';
             ctx.beginPath();
-            ctx.moveTo(0, -10 * size);
-            ctx.lineTo(4, -11 * size + Math.sin(t * 0.15) * 0.5);
-            ctx.lineTo(0, -9 * size);
+            ctx.moveTo(1 * s, -18 * s);
+            ctx.quadraticCurveTo(5 * s + flagFlutter, -19 * s, 7 * s + flagFlutter, -17.5 * s);
+            ctx.lineTo(1 * s, -16.5 * s);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.lineWidth = 0.3;
+            ctx.stroke();
+        } else {
+            // AI ships get a smaller neutral pennant
+            ctx.fillStyle = '#667788';
+            ctx.beginPath();
+            ctx.moveTo(1 * s, -18 * s);
+            ctx.lineTo(4 * s + Math.sin(t * 0.12) * 0.8, -17.5 * s);
+            ctx.lineTo(1 * s, -17 * s);
             ctx.closePath();
             ctx.fill();
         }
@@ -639,6 +832,129 @@ const GameMap = {
         if (this.wakes.length > 200) {
             this.wakes.splice(0, this.wakes.length - 200);
         }
+    },
+
+    drawSeagulls(ctx) {
+        const t = this.animFrame;
+        this.seagulls.forEach(gull => {
+            // Move seagull forward
+            gull.x += gull.speed;
+            // Gentle circular drift
+            gull.circlePhase += 0.003;
+            const driftY = Math.sin(gull.circlePhase) * gull.circleRadius;
+            gull.y += gull.dy + driftY * 0.01;
+
+            // Wrap around when leaving screen
+            if (gull.x > 1.1) { gull.x = -0.1; gull.y = Math.random() * 0.5; }
+            if (gull.y < -0.05 || gull.y > 0.7) { gull.dy = -gull.dy; }
+
+            const sx = gull.x * this.width;
+            const sy = gull.y * this.height;
+            const wing = Math.sin(t * gull.wingSpeed + gull.wingPhase);
+            const sz = gull.size;
+
+            ctx.save();
+            ctx.translate(sx, sy);
+
+            // Shadow on water below
+            ctx.globalAlpha = 0.08;
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.ellipse(3, 12 * sz, 6 * sz, 1.5 * sz, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 0.85;
+
+            // Body
+            ctx.fillStyle = '#f0ece4';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 3.5 * sz, 1.5 * sz, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Left wing
+            ctx.strokeStyle = '#e8e0d4';
+            ctx.fillStyle = '#f5f2ec';
+            ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(-1.5 * sz, 0);
+            ctx.quadraticCurveTo(-6 * sz, -4 * wing * sz, -10 * sz, -2 * wing * sz);
+            ctx.quadraticCurveTo(-8 * sz, -1 * wing * sz, -1.5 * sz, 0.5 * sz);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Right wing
+            ctx.beginPath();
+            ctx.moveTo(1.5 * sz, 0);
+            ctx.quadraticCurveTo(6 * sz, -4 * wing * sz, 10 * sz, -2 * wing * sz);
+            ctx.quadraticCurveTo(8 * sz, -1 * wing * sz, 1.5 * sz, 0.5 * sz);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Wing tips (darker)
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(-9 * sz, -1.8 * wing * sz);
+            ctx.lineTo(-10 * sz, -2 * wing * sz);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(9 * sz, -1.8 * wing * sz);
+            ctx.lineTo(10 * sz, -2 * wing * sz);
+            ctx.stroke();
+
+            // Head
+            ctx.fillStyle = '#f0ece4';
+            ctx.beginPath();
+            ctx.arc(3.5 * sz, -0.5 * sz, 1.2 * sz, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Beak
+            ctx.fillStyle = '#d4a030';
+            ctx.beginPath();
+            ctx.moveTo(4.5 * sz, -0.5 * sz);
+            ctx.lineTo(6.5 * sz, 0);
+            ctx.lineTo(4.5 * sz, 0.2 * sz);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        });
+    },
+
+    drawClouds(ctx) {
+        this.clouds.forEach(cloud => {
+            // Drift slowly
+            cloud.x += cloud.speed;
+            if (cloud.x > 1.15) { cloud.x = -0.15; cloud.y = 0.03 + Math.random() * 0.25; }
+
+            const cx = cloud.x * this.width;
+            const cy = cloud.y * this.height;
+            const sc = cloud.scale;
+
+            ctx.save();
+            ctx.globalAlpha = cloud.opacity;
+            ctx.fillStyle = 'rgba(200, 210, 225, 0.5)';
+
+            cloud.blobs.forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(cx + b.ox * sc, cy + b.oy * sc, b.rx * sc, b.ry * sc, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Highlight on top
+            ctx.fillStyle = 'rgba(230, 240, 255, 0.3)';
+            cloud.blobs.forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(cx + b.ox * sc, cy + (b.oy - 2) * sc, b.rx * sc * 0.7, b.ry * sc * 0.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        });
     },
 
     drawCompass(ctx, gameState) {
