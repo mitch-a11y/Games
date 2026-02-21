@@ -1,7 +1,67 @@
 /* ============================================
    HANSE - Enhanced Map Renderer
-   Phase 3: Terrain, atmosphere, visual polish
+   Phase 4: Complete visual overhaul
    ============================================ */
+
+// --- Fast 2D Simplex Noise (self-contained) ---
+const SimplexNoise = (() => {
+    const F2 = 0.5 * (Math.sqrt(3) - 1);
+    const G2 = (3 - Math.sqrt(3)) / 6;
+    const grad3 = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+    const perm = new Uint8Array(512);
+    const permMod8 = new Uint8Array(512);
+    // Seed with deterministic values
+    const p = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,
+        69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,
+        203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,
+        165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,
+        92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,
+        89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,
+        226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,
+        182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,153,101,155,167,
+        43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,
+        228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,
+        49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,
+        236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+    for (let i = 0; i < 512; i++) {
+        perm[i] = p[i & 255];
+        permMod8[i] = perm[i] % 8;
+    }
+    return {
+        noise2D(xin, yin) {
+            const s = (xin + yin) * F2;
+            const i = Math.floor(xin + s);
+            const j = Math.floor(yin + s);
+            const t = (i + j) * G2;
+            const X0 = i - t, Y0 = j - t;
+            const x0 = xin - X0, y0 = yin - Y0;
+            const i1 = x0 > y0 ? 1 : 0;
+            const j1 = x0 > y0 ? 0 : 1;
+            const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+            const x2 = x0 - 1 + 2 * G2, y2 = y0 - 1 + 2 * G2;
+            const ii = i & 255, jj = j & 255;
+            let n0 = 0, n1 = 0, n2 = 0;
+            let t0 = 0.5 - x0 * x0 - y0 * y0;
+            if (t0 >= 0) { t0 *= t0; const g = grad3[permMod8[ii + perm[jj]]]; n0 = t0 * t0 * (g[0] * x0 + g[1] * y0); }
+            let t1 = 0.5 - x1 * x1 - y1 * y1;
+            if (t1 >= 0) { t1 *= t1; const g = grad3[permMod8[ii + i1 + perm[jj + j1]]]; n1 = t1 * t1 * (g[0] * x1 + g[1] * y1); }
+            let t2 = 0.5 - x2 * x2 - y2 * y2;
+            if (t2 >= 0) { t2 *= t2; const g = grad3[permMod8[ii + 1 + perm[jj + 1]]]; n2 = t2 * t2 * (g[0] * x2 + g[1] * y2); }
+            return 70 * (n0 + n1 + n2);
+        },
+        // Fractal Brownian Motion for richer textures
+        fbm(x, y, octaves, lacunarity, gain) {
+            let sum = 0, amp = 1, freq = 1, max = 0;
+            for (let i = 0; i < octaves; i++) {
+                sum += this.noise2D(x * freq, y * freq) * amp;
+                max += amp;
+                amp *= gain;
+                freq *= lacunarity;
+            }
+            return sum / max;
+        }
+    };
+})();
 
 const GameMap = {
     canvas: null,
@@ -186,16 +246,26 @@ const GameMap = {
         const month = gameState && gameState.date ? gameState.date.month : 6;
         const seasonDark = this._getSeasonalDarkness(month);
 
-        // Deep ocean gradient background with seasonal tint
-        const grad = ctx.createLinearGradient(0, 0, 0, this.height);
-        const r0 = Math.round(7 * (1 - seasonDark * 0.3));
-        const g0 = Math.round(26 * (1 - seasonDark * 0.2));
-        const b0 = Math.round(48 * (1 - seasonDark * 0.15));
-        grad.addColorStop(0, `rgb(${r0},${g0},${b0})`);
-        grad.addColorStop(0.3, `rgb(${Math.round(12*(1-seasonDark*0.25))},${Math.round(40*(1-seasonDark*0.15))},${Math.round(68*(1-seasonDark*0.1))})`);
-        grad.addColorStop(0.6, `rgb(${Math.round(14*(1-seasonDark*0.2))},${Math.round(48*(1-seasonDark*0.12))},${Math.round(88*(1-seasonDark*0.08))})`);
-        grad.addColorStop(1, `rgb(${Math.round(10*(1-seasonDark*0.25))},${Math.round(34*(1-seasonDark*0.15))},${Math.round(64*(1-seasonDark*0.1))})`);
+        // Rich deep ocean gradient with seasonal tinting
+        const grad = ctx.createLinearGradient(0, 0, this.width * 0.3, this.height);
+        const sf = 1 - seasonDark * 0.3;
+        grad.addColorStop(0,   `rgb(${Math.round(5*sf)},${Math.round(20*sf)},${Math.round(45*sf)})`);
+        grad.addColorStop(0.2, `rgb(${Math.round(8*sf)},${Math.round(30*sf)},${Math.round(58*sf)})`);
+        grad.addColorStop(0.5, `rgb(${Math.round(12*sf)},${Math.round(42*sf)},${Math.round(78*sf)})`);
+        grad.addColorStop(0.8, `rgb(${Math.round(10*sf)},${Math.round(38*sf)},${Math.round(70*sf)})`);
+        grad.addColorStop(1,   `rgb(${Math.round(6*sf)},${Math.round(25*sf)},${Math.round(52*sf)})`);
         ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        // Subtle radial depth: lighter center, darker edges (vignette on sea)
+        const vigR = Math.max(this.width, this.height) * 0.75;
+        const seaVig = ctx.createRadialGradient(
+            this.width * 0.5, this.height * 0.4, vigR * 0.2,
+            this.width * 0.5, this.height * 0.4, vigR
+        );
+        seaVig.addColorStop(0, 'rgba(20, 60, 100, 0.08)');
+        seaVig.addColorStop(1, 'rgba(2, 8, 20, 0.15)');
+        ctx.fillStyle = seaVig;
         ctx.fillRect(0, 0, this.width, this.height);
 
         // Animated water
@@ -250,9 +320,45 @@ const GameMap = {
 
         // Seasonal darkness overlay
         if (seasonDark > 0.1) {
-            ctx.fillStyle = `rgba(5, 10, 25, ${seasonDark * 0.15})`;
+            ctx.fillStyle = `rgba(5, 10, 25, ${seasonDark * 0.18})`;
             ctx.fillRect(0, 0, this.width, this.height);
         }
+
+        // --- God rays (subtle, from upper-right in good weather) ---
+        if (gameState && gameState.wind && gameState.wind.strength < 1.5) {
+            const rayAlpha = (1.5 - gameState.wind.strength) * 0.015 * (1 - seasonDark * 0.6);
+            if (rayAlpha > 0.002) {
+                ctx.save();
+                ctx.globalAlpha = rayAlpha;
+                const rx = this.width * 0.88;
+                const ry = -this.height * 0.1;
+                for (let i = 0; i < 5; i++) {
+                    const angle = -0.3 + i * 0.15;
+                    const len = this.height * 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(rx, ry);
+                    ctx.lineTo(rx + Math.cos(angle) * len, ry + Math.sin(angle) * len);
+                    ctx.lineTo(rx + Math.cos(angle + 0.04) * len, ry + Math.sin(angle + 0.04) * len);
+                    ctx.closePath();
+                    ctx.fillStyle = `rgba(255, 240, 200, ${0.3 + i * 0.05})`;
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+        }
+
+        // --- Vignette overlay (darkened edges) ---
+        const vigSize = Math.max(this.width, this.height) * 0.8;
+        const vignette = ctx.createRadialGradient(
+            this.width * 0.5, this.height * 0.45, vigSize * 0.35,
+            this.width * 0.5, this.height * 0.45, vigSize
+        );
+        vignette.addColorStop(0, 'rgba(0,0,0,0)');
+        vignette.addColorStop(0.7, 'rgba(0,0,0,0)');
+        vignette.addColorStop(1, 'rgba(0,0,0,0.25)');
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, this.width, this.height);
 
         // Compass rose
         this.drawCompass(ctx, gameState);
@@ -268,69 +374,140 @@ const GameMap = {
     drawSea(ctx) {
         const t = this.animFrame;
 
-        // Layer 1: large slow waves
-        ctx.strokeStyle = 'rgba(20, 70, 130, 0.15)';
-        ctx.lineWidth = 1.5;
-        for (let y = -10; y < this.height + 10; y += 28) {
+        // --- Depth zone overlay: lighter near coasts ---
+        // Subtle noise-based depth variation across the sea
+        const stepX = 18, stepY = 18;
+        for (let sy = 0; sy < this.height; sy += stepY) {
+            for (let sx = 0; sx < this.width; sx += stepX) {
+                const n = SimplexNoise.fbm(sx * 0.003 + t * 0.0004, sy * 0.003, 3, 2.0, 0.5);
+                const depth = (n + 1) * 0.5; // 0..1
+                if (depth > 0.55) {
+                    ctx.fillStyle = `rgba(25, 80, 140, ${(depth - 0.55) * 0.18})`;
+                    ctx.fillRect(sx, sy, stepX, stepY);
+                } else if (depth < 0.4) {
+                    ctx.fillStyle = `rgba(50, 140, 200, ${(0.4 - depth) * 0.12})`;
+                    ctx.fillRect(sx, sy, stepX, stepY);
+                }
+            }
+        }
+
+        // --- Layer 1: deep rolling swells ---
+        ctx.strokeStyle = 'rgba(15, 55, 110, 0.18)';
+        ctx.lineWidth = 2;
+        for (let y = -10; y < this.height + 10; y += 32) {
             ctx.beginPath();
             for (let x = 0; x < this.width; x += 4) {
+                const n = SimplexNoise.noise2D(x * 0.004 + t * 0.006, y * 0.006);
                 const wy = y
-                    + Math.sin((x * 0.008) + t * 0.012) * 6
-                    + Math.sin((x * 0.015) + t * 0.02 + y * 0.01) * 3;
+                    + Math.sin((x * 0.006) + t * 0.01) * 7
+                    + n * 5
+                    + Math.sin((x * 0.012) + t * 0.018 + y * 0.008) * 3;
                 if (x === 0) ctx.moveTo(x, wy);
                 else ctx.lineTo(x, wy);
             }
             ctx.stroke();
         }
 
-        // Layer 2: smaller faster ripples
-        ctx.strokeStyle = 'rgba(40, 100, 170, 0.08)';
-        ctx.lineWidth = 0.8;
-        for (let y = 5; y < this.height; y += 16) {
+        // --- Layer 2: medium chop ---
+        ctx.strokeStyle = 'rgba(30, 90, 160, 0.10)';
+        ctx.lineWidth = 1;
+        for (let y = 5; y < this.height; y += 18) {
             ctx.beginPath();
             for (let x = 0; x < this.width; x += 3) {
                 const wy = y
-                    + Math.sin((x * 0.02) + t * 0.03 + y * 0.005) * 2
-                    + Math.cos((x * 0.03) + t * 0.015) * 1.5;
+                    + Math.sin((x * 0.018) + t * 0.028 + y * 0.004) * 2.5
+                    + Math.cos((x * 0.025) + t * 0.014) * 1.8
+                    + SimplexNoise.noise2D(x * 0.01, y * 0.01 + t * 0.005) * 1.5;
                 if (x === 0) ctx.moveTo(x, wy);
                 else ctx.lineTo(x, wy);
             }
             ctx.stroke();
         }
 
-        // Layer 3: foam highlights on crests
-        ctx.strokeStyle = 'rgba(120, 180, 230, 0.06)';
-        ctx.lineWidth = 2;
-        for (let y = 0; y < this.height; y += 45) {
+        // --- Layer 3: fine surface ripples ---
+        ctx.strokeStyle = 'rgba(50, 120, 190, 0.06)';
+        ctx.lineWidth = 0.6;
+        for (let y = 2; y < this.height; y += 10) {
             ctx.beginPath();
-            const wavePhase = t * 0.01 + y * 0.02;
-            for (let x = 0; x < this.width; x += 5) {
-                const wy = y + Math.sin((x * 0.007) + wavePhase) * 8;
-                const brightness = Math.max(0, Math.sin((x * 0.007) + wavePhase));
-                if (brightness > 0.85) {
-                    ctx.globalAlpha = (brightness - 0.85) * 4;
-                    ctx.fillStyle = 'rgba(180, 220, 255, 0.15)';
-                    ctx.fillRect(x, wy - 1, 6, 2);
-                }
+            for (let x = 0; x < this.width; x += 3) {
+                const wy = y
+                    + Math.sin((x * 0.035) + t * 0.04 + y * 0.008) * 1.2
+                    + Math.cos((x * 0.05) + t * 0.025 + y * 0.003) * 0.8;
                 if (x === 0) ctx.moveTo(x, wy);
                 else ctx.lineTo(x, wy);
             }
-            ctx.globalAlpha = 1;
+            ctx.stroke();
         }
+
+        // --- Caustic light patches (underwater light refraction) ---
+        ctx.globalAlpha = 0.04;
+        for (let i = 0; i < 25; i++) {
+            const cx = ((i * 157 + t * 0.3) % (this.width + 60)) - 30;
+            const cy = ((i * 223 + t * 0.2) % (this.height + 60)) - 30;
+            const sz = 15 + Math.sin(t * 0.015 + i) * 8;
+            const bright = (Math.sin(t * 0.02 + i * 2.1) + 1) * 0.5;
+            ctx.fillStyle = `rgba(80, 180, 255, ${bright})`;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, sz, sz * 0.6, i * 0.7 + t * 0.003, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // --- Foam highlights on wave crests ---
+        for (let y = 0; y < this.height; y += 40) {
+            const wavePhase = t * 0.01 + y * 0.018;
+            for (let x = 0; x < this.width; x += 5) {
+                const wy = y + Math.sin((x * 0.007) + wavePhase) * 8;
+                const brightness = Math.max(0, Math.sin((x * 0.007) + wavePhase));
+                if (brightness > 0.82) {
+                    const alpha = (brightness - 0.82) * 3.5;
+                    ctx.globalAlpha = alpha;
+                    ctx.fillStyle = 'rgba(190, 225, 255, 0.2)';
+                    ctx.fillRect(x, wy - 1, 8, 2.5);
+                    // Foam speckles
+                    if (brightness > 0.9) {
+                        ctx.fillStyle = 'rgba(220, 240, 255, 0.3)';
+                        ctx.fillRect(x + 2, wy - 2, 2, 1.5);
+                        ctx.fillRect(x + 6, wy + 0.5, 1.5, 1);
+                    }
+                }
+            }
+        }
+        ctx.globalAlpha = 1;
     },
 
     drawSparkles(ctx) {
         const t = this.animFrame;
         this.sparkles.forEach(s => {
             const brightness = (Math.sin(t * s.speed + s.phase) + 1) * 0.5;
-            if (brightness > 0.7) {
+            if (brightness > 0.65) {
                 const sx = s.x * this.width;
                 const sy = s.y * this.height;
-                ctx.globalAlpha = (brightness - 0.7) * 3;
-                ctx.fillStyle = '#b8d8f8';
+                const alpha = (brightness - 0.65) * 2.5;
+                // Outer glow
+                ctx.globalAlpha = alpha * 0.3;
+                ctx.fillStyle = 'rgba(150, 210, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(sx, sy, s.size * 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                // Bright core
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = '#d0eaff';
                 ctx.beginPath();
                 ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
                 ctx.fill();
+                // Star cross highlight
+                if (brightness > 0.85) {
+                    ctx.globalAlpha = (brightness - 0.85) * 4;
+                    ctx.strokeStyle = 'rgba(220, 240, 255, 0.6)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(sx - s.size * 2, sy);
+                    ctx.lineTo(sx + s.size * 2, sy);
+                    ctx.moveTo(sx, sy - s.size * 2);
+                    ctx.lineTo(sx, sy + s.size * 2);
+                    ctx.stroke();
+                }
             }
         });
         ctx.globalAlpha = 1;
@@ -340,56 +517,110 @@ const GameMap = {
         const ctx = this.landCtx;
         ctx.clearRect(0, 0, this.width, this.height);
 
-        // --- Shallow water zone (drawn first, behind land) ---
+        // --- Shallow water zones (3 bands for depth transition) ---
         ctx.save();
-        const shallowGrad = ctx.createLinearGradient(0, 0, 0, this.height);
-        shallowGrad.addColorStop(0, 'rgba(30, 90, 140, 0.5)');
-        shallowGrad.addColorStop(0.5, 'rgba(35, 100, 150, 0.5)');
-        shallowGrad.addColorStop(1, 'rgba(28, 85, 130, 0.5)');
-        ctx.fillStyle = shallowGrad;
-        ctx.strokeStyle = 'rgba(50, 120, 170, 0.3)';
-        ctx.lineWidth = 1;
+        // Outermost shallow band - turquoise tint
+        ctx.fillStyle = 'rgba(25, 85, 130, 0.35)';
+        ctx.strokeStyle = 'rgba(40, 110, 160, 0.2)';
+        ctx.lineWidth = 0.5;
+        this.drawAllLandMasses(ctx, false, 18);
+        // Middle band
+        ctx.fillStyle = 'rgba(35, 110, 160, 0.30)';
         this.drawAllLandMasses(ctx, false, 12);
-        // Inner lighter band
-        ctx.fillStyle = 'rgba(50, 130, 180, 0.25)';
+        // Inner shallow band - lighter cyan
+        ctx.fillStyle = 'rgba(50, 140, 190, 0.22)';
         this.drawAllLandMasses(ctx, false, 6);
+        // Beach/sand strip (narrow warm band)
+        ctx.fillStyle = 'rgba(180, 165, 120, 0.18)';
+        this.drawAllLandMasses(ctx, false, 3);
         ctx.restore();
 
-        // --- Main land with gradient ---
+        // --- Main land base color with latitude gradient ---
         const landGrad = ctx.createLinearGradient(0, 0, 0, this.height);
-        landGrad.addColorStop(0, '#2a5e2a');
-        landGrad.addColorStop(0.3, '#336633');
-        landGrad.addColorStop(0.6, '#3a7035');
-        landGrad.addColorStop(1, '#2a5a28');
-
+        landGrad.addColorStop(0, '#1e4a28');   // dark boreal north
+        landGrad.addColorStop(0.2, '#265530');  // taiga
+        landGrad.addColorStop(0.4, '#2d6233');  // mixed forest
+        landGrad.addColorStop(0.6, '#387038');  // temperate
+        landGrad.addColorStop(0.8, '#3a7535');  // southern lowlands
+        landGrad.addColorStop(1, '#2e5e2a');    // deep south
         ctx.fillStyle = landGrad;
-        ctx.strokeStyle = '#4a8a4a';
+        ctx.strokeStyle = 'rgba(60, 100, 50, 0.6)';
         ctx.lineWidth = 1.5;
         this.drawAllLandMasses(ctx);
 
-        // Coastline shadow
-        ctx.shadowColor = 'rgba(0, 20, 40, 0.4)';
-        ctx.shadowBlur = 6;
+        // --- Noise-based terrain texture overlay ---
+        // Clip to land masses so texture only appears on land
+        ctx.save();
+        ctx.beginPath();
+        const masses = this.getLandMasses();
+        masses.forEach(pts => {
+            if (pts.length < 3) return;
+            const first = this.worldToScreen(pts[0][0], pts[0][1]);
+            ctx.moveTo(first.x, first.y);
+            for (let i = 1; i < pts.length; i++) {
+                const p = this.worldToScreen(pts[i][0], pts[i][1]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.closePath();
+        });
+        ctx.clip();
+
+        // Paint noise texture within the clipped land
+        const tStep = 12;
+        for (let ty = 0; ty < this.height; ty += tStep) {
+            for (let tx = 0; tx < this.width; tx += tStep) {
+                const n = SimplexNoise.fbm(tx * 0.008, ty * 0.008, 4, 2.0, 0.5);
+                const val = (n + 1) * 0.5; // normalize 0..1
+                if (val > 0.55) {
+                    // Highland patches (browner)
+                    ctx.fillStyle = `rgba(90, 75, 45, ${(val - 0.55) * 0.35})`;
+                    ctx.fillRect(tx, ty, tStep, tStep);
+                } else if (val < 0.4) {
+                    // Lowland meadows (brighter green)
+                    ctx.fillStyle = `rgba(60, 120, 50, ${(0.4 - val) * 0.25})`;
+                    ctx.fillRect(tx, ty, tStep, tStep);
+                }
+                // Fine grain detail
+                const n2 = SimplexNoise.noise2D(tx * 0.025, ty * 0.025);
+                if (n2 > 0.3) {
+                    ctx.fillStyle = `rgba(30, 55, 25, ${(n2 - 0.3) * 0.15})`;
+                    ctx.fillRect(tx, ty, tStep, tStep);
+                }
+            }
+        }
+        ctx.restore();
+
+        // --- Coastline shadow and highlight ---
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 15, 35, 0.5)';
+        ctx.shadowBlur = 8;
         ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = 'rgba(0,0,0,0)';
-        ctx.strokeStyle = 'rgba(60, 100, 60, 0.5)';
-        ctx.lineWidth = 1;
+        ctx.shadowOffsetY = 3;
+        ctx.strokeStyle = 'rgba(40, 80, 45, 0.4)';
+        ctx.lineWidth = 1.2;
         this.drawAllLandMasses(ctx, true);
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
+        ctx.restore();
 
-        // --- Terrain texture (subtle dots) ---
-        ctx.fillStyle = 'rgba(50, 110, 50, 0.2)';
-        for (let i = 0; i < 300; i++) {
-            const tx = Math.random() * this.width;
-            const ty = Math.random() * this.height;
-            ctx.beginPath();
-            ctx.arc(tx, ty, 0.8 + Math.random(), 0, Math.PI * 2);
-            ctx.fill();
-        }
+        // --- Coastal foam dots along shoreline ---
+        ctx.save();
+        ctx.fillStyle = 'rgba(200, 220, 240, 0.12)';
+        masses.forEach(pts => {
+            for (let i = 0; i < pts.length; i++) {
+                const p = this.worldToScreen(pts[i][0], pts[i][1]);
+                for (let d = 0; d < 3; d++) {
+                    const ox = (Math.sin(i * 7 + d * 3) * 4 + Math.cos(i * 11) * 3) * this.scale;
+                    const oy = (Math.cos(i * 5 + d * 2) * 4 + Math.sin(i * 13) * 3) * this.scale;
+                    ctx.beginPath();
+                    ctx.arc(p.x + ox, p.y + oy, (0.8 + d * 0.4) * this.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        });
+        ctx.restore();
 
         // --- Rivers ---
         this.drawRivers(ctx);
@@ -403,32 +634,53 @@ const GameMap = {
 
     drawRivers(ctx) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(60, 130, 190, 0.6)';
-        ctx.lineWidth = 1.5 * this.scale;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
         // Elbe - flows into Hamburg from south
         const elbe = [[430, 600], [432, 540], [428, 490], [430, 450], [432, 420], [430, 370]];
-        this.drawRiverPath(ctx, elbe, 1.5);
+        this.drawRiverPath(ctx, elbe, 2.0);
 
         // Oder - flows into Stettin from south
         const oder = [[610, 600], [615, 530], [618, 480], [615, 440], [616, 400], [615, 370]];
-        this.drawRiverPath(ctx, oder, 1.3);
+        this.drawRiverPath(ctx, oder, 1.7);
 
         // Weichsel/Vistula - flows into Danzig from south
         const weichsel = [[718, 600], [722, 530], [725, 470], [720, 420], [720, 380], [720, 340]];
-        this.drawRiverPath(ctx, weichsel, 1.4);
+        this.drawRiverPath(ctx, weichsel, 1.8);
 
         // Weser - flows near Bremen
         const weser = [[388, 600], [390, 520], [392, 460], [390, 385]];
-        this.drawRiverPath(ctx, weser, 1.0);
+        this.drawRiverPath(ctx, weser, 1.3);
+
+        // Dvina - flows toward Riga from east
+        const dvina = [[920, 260], [910, 255], [900, 248], [895, 242], [890, 240]];
+        this.drawRiverPath(ctx, dvina, 1.2);
 
         ctx.restore();
     },
 
     drawRiverPath(ctx, points, widthMul) {
         if (points.length < 2) return;
+
+        // River bank shadow (wider, darker)
+        ctx.beginPath();
+        const p0b = this.worldToScreen(points[0][0], points[0][1]);
+        ctx.moveTo(p0b.x, p0b.y);
+        for (let i = 1; i < points.length; i++) {
+            const p = this.worldToScreen(points[i][0], points[i][1]);
+            if (i < points.length - 1) {
+                const pn = this.worldToScreen(points[i+1][0], points[i+1][1]);
+                ctx.quadraticCurveTo(p.x, p.y, (p.x + pn.x) / 2, (p.y + pn.y) / 2);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        }
+        ctx.lineWidth = (widthMul + 1.2) * this.scale;
+        ctx.strokeStyle = 'rgba(30, 65, 40, 0.25)';
+        ctx.stroke();
+
+        // Main river body
         ctx.beginPath();
         const p0 = this.worldToScreen(points[0][0], points[0][1]);
         ctx.moveTo(p0.x, p0.y);
@@ -436,19 +688,18 @@ const GameMap = {
             const p = this.worldToScreen(points[i][0], points[i][1]);
             if (i < points.length - 1) {
                 const pn = this.worldToScreen(points[i+1][0], points[i+1][1]);
-                const cx = (p.x + pn.x) / 2;
-                const cy = (p.y + pn.y) / 2;
-                ctx.quadraticCurveTo(p.x, p.y, cx, cy);
+                ctx.quadraticCurveTo(p.x, p.y, (p.x + pn.x) / 2, (p.y + pn.y) / 2);
             } else {
                 ctx.lineTo(p.x, p.y);
             }
         }
         ctx.lineWidth = widthMul * this.scale;
-        ctx.strokeStyle = 'rgba(50, 120, 180, 0.5)';
+        ctx.strokeStyle = 'rgba(40, 105, 165, 0.55)';
         ctx.stroke();
-        // Highlight
-        ctx.lineWidth = widthMul * 0.5 * this.scale;
-        ctx.strokeStyle = 'rgba(80, 160, 220, 0.3)';
+
+        // Center highlight (specular reflection)
+        ctx.lineWidth = widthMul * 0.35 * this.scale;
+        ctx.strokeStyle = 'rgba(90, 170, 230, 0.30)';
         ctx.stroke();
     },
 
@@ -456,48 +707,107 @@ const GameMap = {
         if (!this.terrainSeed) return;
         ctx.save();
 
-        this.terrainSeed.mountains.forEach(m => {
+        // Sort mountains back-to-front (by y) for overlap
+        const sorted = [...this.terrainSeed.mountains].sort((a, b) => a.y - b.y);
+
+        sorted.forEach(m => {
             const p = this.worldToScreen(m.x, m.y);
-            const s = m.size * this.scale * 6;
+            const s = m.size * this.scale * 8;
 
-            // Mountain shadow
-            ctx.fillStyle = 'rgba(20, 50, 20, 0.35)';
+            // --- Ground shadow (cast shadow to the right) ---
+            ctx.fillStyle = 'rgba(10, 30, 15, 0.25)';
             ctx.beginPath();
-            ctx.moveTo(p.x - s * 0.9, p.y + s * 0.35);
-            ctx.lineTo(p.x + s * 0.2, p.y - s * 0.8);
-            ctx.lineTo(p.x + s * 1.1, p.y + s * 0.35);
+            ctx.moveTo(p.x - s * 0.7, p.y + s * 0.35);
+            ctx.lineTo(p.x + s * 0.3, p.y - s * 0.7);
+            ctx.lineTo(p.x + s * 1.3, p.y + s * 0.4);
             ctx.closePath();
             ctx.fill();
 
-            // Mountain body
-            ctx.fillStyle = 'rgba(60, 90, 50, 0.7)';
+            // --- Dark face (left/shaded side) ---
+            const darkR = Math.round(45 + m.size * 15);
+            const darkG = Math.round(60 + m.size * 20);
+            const darkB = Math.round(40 + m.size * 10);
+            ctx.fillStyle = `rgba(${darkR}, ${darkG}, ${darkB}, 0.85)`;
             ctx.beginPath();
-            ctx.moveTo(p.x - s * 0.8, p.y + s * 0.3);
-            ctx.lineTo(p.x, p.y - s * 0.9);
+            ctx.moveTo(p.x - s * 0.75, p.y + s * 0.3);
+            ctx.lineTo(p.x + s * 0.05, p.y - s * 0.95);
+            ctx.lineTo(p.x + s * 0.05, p.y + s * 0.2);
+            ctx.closePath();
+            ctx.fill();
+
+            // --- Light face (right/sunlit side) ---
+            const lightR = Math.round(70 + m.size * 25);
+            const lightG = Math.round(105 + m.size * 20);
+            const lightB = Math.round(55 + m.size * 15);
+            ctx.fillStyle = `rgba(${lightR}, ${lightG}, ${lightB}, 0.85)`;
+            ctx.beginPath();
+            ctx.moveTo(p.x + s * 0.05, p.y - s * 0.95);
             ctx.lineTo(p.x + s * 0.8, p.y + s * 0.3);
+            ctx.lineTo(p.x + s * 0.05, p.y + s * 0.2);
             ctx.closePath();
             ctx.fill();
 
-            // Lighter face
-            ctx.fillStyle = 'rgba(80, 120, 60, 0.5)';
+            // --- Ridge line (edge highlight) ---
+            ctx.strokeStyle = `rgba(${lightR + 30}, ${lightG + 25}, ${lightB + 20}, 0.4)`;
+            ctx.lineWidth = 0.8;
             ctx.beginPath();
-            ctx.moveTo(p.x, p.y - s * 0.9);
-            ctx.lineTo(p.x + s * 0.8, p.y + s * 0.3);
-            ctx.lineTo(p.x + s * 0.1, p.y + s * 0.15);
-            ctx.closePath();
-            ctx.fill();
+            ctx.moveTo(p.x + s * 0.05, p.y - s * 0.95);
+            ctx.lineTo(p.x + s * 0.05, p.y + s * 0.2);
+            ctx.stroke();
 
-            // Snow cap
-            if (m.snow) {
-                ctx.fillStyle = 'rgba(220, 230, 240, 0.7)';
+            // --- Rock striations on dark face ---
+            ctx.strokeStyle = `rgba(${darkR - 15}, ${darkG - 10}, ${darkB - 10}, 0.2)`;
+            ctx.lineWidth = 0.5;
+            for (let i = 1; i <= 3; i++) {
+                const frac = i * 0.22;
                 ctx.beginPath();
-                ctx.moveTo(p.x - s * 0.2, p.y - s * 0.55);
-                ctx.lineTo(p.x, p.y - s * 0.9);
-                ctx.lineTo(p.x + s * 0.2, p.y - s * 0.55);
-                ctx.quadraticCurveTo(p.x, p.y - s * 0.45, p.x - s * 0.2, p.y - s * 0.55);
+                ctx.moveTo(p.x - s * 0.75 * (1 - frac), p.y + s * 0.3 - s * 0.3 * frac);
+                ctx.lineTo(p.x + s * 0.05, p.y - s * 0.95 + s * 1.15 * (1 - frac));
+                ctx.stroke();
+            }
+
+            // --- Snow cap with gradient melt ---
+            if (m.snow) {
+                // Snow on sunlit side
+                ctx.fillStyle = 'rgba(230, 240, 250, 0.75)';
+                ctx.beginPath();
+                ctx.moveTo(p.x + s * 0.05, p.y - s * 0.95);
+                ctx.lineTo(p.x + s * 0.25, p.y - s * 0.55);
+                ctx.quadraticCurveTo(p.x + s * 0.15, p.y - s * 0.50, p.x + s * 0.05, p.y - s * 0.48);
                 ctx.closePath();
                 ctx.fill();
+
+                // Snow on shaded side (slightly darker/blue)
+                ctx.fillStyle = 'rgba(200, 215, 235, 0.65)';
+                ctx.beginPath();
+                ctx.moveTo(p.x + s * 0.05, p.y - s * 0.95);
+                ctx.lineTo(p.x - s * 0.22, p.y - s * 0.52);
+                ctx.quadraticCurveTo(p.x - s * 0.08, p.y - s * 0.45, p.x + s * 0.05, p.y - s * 0.48);
+                ctx.closePath();
+                ctx.fill();
+
+                // Snow drip edge
+                ctx.strokeStyle = 'rgba(220, 235, 250, 0.3)';
+                ctx.lineWidth = 0.8;
+                ctx.beginPath();
+                ctx.moveTo(p.x - s * 0.22, p.y - s * 0.52);
+                ctx.quadraticCurveTo(p.x - s * 0.08, p.y - s * 0.44, p.x + s * 0.05, p.y - s * 0.48);
+                ctx.quadraticCurveTo(p.x + s * 0.15, p.y - s * 0.49, p.x + s * 0.25, p.y - s * 0.55);
+                ctx.stroke();
             }
+
+            // --- Atmospheric haze at base ---
+            const hazeGrd = ctx.createLinearGradient(p.x, p.y - s * 0.1, p.x, p.y + s * 0.4);
+            hazeGrd.addColorStop(0, 'rgba(45, 65, 40, 0)');
+            hazeGrd.addColorStop(1, 'rgba(35, 55, 35, 0.3)');
+            ctx.fillStyle = hazeGrd;
+            ctx.beginPath();
+            ctx.moveTo(p.x - s * 0.8, p.y + s * 0.35);
+            ctx.lineTo(p.x + s * 0.85, p.y + s * 0.35);
+            ctx.lineTo(p.x + s * 0.5, p.y);
+            ctx.lineTo(p.x - s * 0.5, p.y);
+            ctx.closePath();
+            ctx.fill();
         });
         ctx.restore();
     },
@@ -506,40 +816,97 @@ const GameMap = {
         if (!this.terrainSeed) return;
         ctx.save();
 
-        this.terrainSeed.forests.forEach(f => {
+        // Sort forests back-to-front for proper overlap
+        const sorted = [...this.terrainSeed.forests].sort((a, b) => a.y - b.y);
+
+        sorted.forEach(f => {
+            // Northern forests (y < 260) get conifers, southern get deciduous mix
+            const isNorthern = f.y < 260;
+
             for (let t = 0; t < f.count; t++) {
-                const ox = (t - f.count / 2) * 5 * f.size;
-                const oy = ((t % 2) - 0.5) * 3 * f.size;
+                const ox = (t - f.count / 2) * 6 * f.size + Math.sin(t * 2.7) * 2;
+                const oy = ((t % 2) - 0.5) * 4 * f.size + Math.cos(t * 1.9) * 1.5;
                 const p = this.worldToScreen(f.x + ox, f.y + oy);
-                const s = f.size * this.scale * 4;
+                const s = f.size * this.scale * 5;
+                const treeVariant = (t + Math.floor(f.x)) % 3;
 
-                // Tree shadow
-                ctx.fillStyle = 'rgba(15, 40, 15, 0.25)';
+                // --- Ground shadow ---
+                ctx.fillStyle = 'rgba(10, 30, 10, 0.20)';
                 ctx.beginPath();
-                ctx.ellipse(p.x + s * 0.15, p.y + s * 0.45, s * 0.45, s * 0.15, 0, 0, Math.PI * 2);
+                ctx.ellipse(p.x + s * 0.12, p.y + s * 0.4, s * 0.5, s * 0.15, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Tree trunk
-                ctx.fillStyle = 'rgba(80, 55, 30, 0.6)';
-                ctx.fillRect(p.x - s * 0.05, p.y + s * 0.1, s * 0.1, s * 0.3);
+                if (isNorthern || treeVariant === 0) {
+                    // --- CONIFER (spruce/pine) - layered triangles ---
+                    // Trunk
+                    ctx.fillStyle = 'rgba(65, 45, 25, 0.7)';
+                    ctx.fillRect(p.x - s * 0.04, p.y + s * 0.15, s * 0.08, s * 0.25);
 
-                // Tree canopy (dark triangle)
-                ctx.fillStyle = 'rgba(30, 70, 25, 0.65)';
-                ctx.beginPath();
-                ctx.moveTo(p.x - s * 0.35, p.y + s * 0.15);
-                ctx.lineTo(p.x, p.y - s * 0.5);
-                ctx.lineTo(p.x + s * 0.35, p.y + s * 0.15);
-                ctx.closePath();
-                ctx.fill();
+                    // Bottom layer (widest)
+                    ctx.fillStyle = 'rgba(20, 55, 22, 0.75)';
+                    ctx.beginPath();
+                    ctx.moveTo(p.x - s * 0.38, p.y + s * 0.2);
+                    ctx.lineTo(p.x, p.y - s * 0.08);
+                    ctx.lineTo(p.x + s * 0.38, p.y + s * 0.2);
+                    ctx.closePath();
+                    ctx.fill();
 
-                // Lighter top layer
-                ctx.fillStyle = 'rgba(50, 100, 40, 0.45)';
-                ctx.beginPath();
-                ctx.moveTo(p.x - s * 0.25, p.y - s * 0.05);
-                ctx.lineTo(p.x, p.y - s * 0.5);
-                ctx.lineTo(p.x + s * 0.25, p.y - s * 0.05);
-                ctx.closePath();
-                ctx.fill();
+                    // Middle layer
+                    ctx.fillStyle = 'rgba(25, 65, 25, 0.75)';
+                    ctx.beginPath();
+                    ctx.moveTo(p.x - s * 0.3, p.y + s * 0.05);
+                    ctx.lineTo(p.x, p.y - s * 0.35);
+                    ctx.lineTo(p.x + s * 0.3, p.y + s * 0.05);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Top layer (narrowest)
+                    ctx.fillStyle = 'rgba(30, 75, 30, 0.75)';
+                    ctx.beginPath();
+                    ctx.moveTo(p.x - s * 0.2, p.y - s * 0.15);
+                    ctx.lineTo(p.x, p.y - s * 0.6);
+                    ctx.lineTo(p.x + s * 0.2, p.y - s * 0.15);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Sunlit highlight on right edges
+                    ctx.fillStyle = 'rgba(55, 100, 45, 0.35)';
+                    ctx.beginPath();
+                    ctx.moveTo(p.x + s * 0.05, p.y - s * 0.35);
+                    ctx.lineTo(p.x + s * 0.3, p.y + s * 0.05);
+                    ctx.lineTo(p.x + s * 0.12, p.y + s * 0.05);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // --- DECIDUOUS (round canopy) ---
+                    // Trunk
+                    ctx.fillStyle = 'rgba(75, 50, 28, 0.65)';
+                    ctx.fillRect(p.x - s * 0.05, p.y + s * 0.05, s * 0.1, s * 0.35);
+
+                    // Main canopy (dark base)
+                    ctx.fillStyle = 'rgba(35, 75, 30, 0.70)';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y - s * 0.15, s * 0.38, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Highlight blob (upper right, sunlit)
+                    ctx.fillStyle = 'rgba(55, 110, 40, 0.50)';
+                    ctx.beginPath();
+                    ctx.arc(p.x + s * 0.1, p.y - s * 0.25, s * 0.26, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Top bright cap
+                    ctx.fillStyle = 'rgba(70, 130, 50, 0.35)';
+                    ctx.beginPath();
+                    ctx.arc(p.x + s * 0.05, p.y - s * 0.32, s * 0.16, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Depth shadow underneath
+                    ctx.fillStyle = 'rgba(15, 35, 12, 0.25)';
+                    ctx.beginPath();
+                    ctx.arc(p.x - s * 0.05, p.y + s * 0.02, s * 0.28, 0, Math.PI);
+                    ctx.fill();
+                }
             }
         });
         ctx.restore();
@@ -1357,40 +1724,58 @@ const GameMap = {
 
         // Storm effect when wind is very strong
         if (windStrength > 2.0) {
-            const stormIntensity = (windStrength - 2.0) / 1.0;
+            const stormIntensity = Math.min((windStrength - 2.0) / 1.0, 1.0);
             const windAngle = gameState.wind.direction * Math.PI / 4;
 
-            // Rain streaks
-            ctx.strokeStyle = `rgba(150, 180, 210, ${stormIntensity * 0.12})`;
-            ctx.lineWidth = 0.8;
-            for (let i = 0; i < 40 * stormIntensity; i++) {
-                const rx = ((i * 37 + t * 3) % this.width);
-                const ry = ((i * 53 + t * 5) % this.height);
-                const len = 8 + stormIntensity * 12;
+            // Dark storm sky overlay
+            ctx.fillStyle = `rgba(25, 35, 50, ${stormIntensity * 0.08})`;
+            ctx.fillRect(0, 0, this.width, this.height);
+
+            // Heavy rain streaks (more, longer, varied)
+            for (let i = 0; i < 60 * stormIntensity; i++) {
+                const rx = ((i * 37 + t * 4) % (this.width + 40)) - 20;
+                const ry = ((i * 53 + t * 6) % (this.height + 40)) - 20;
+                const len = 10 + stormIntensity * 15 + (i % 5) * 2;
+                const alpha = 0.06 + stormIntensity * 0.08 + (i % 3) * 0.02;
+                ctx.strokeStyle = `rgba(160, 190, 220, ${alpha})`;
+                ctx.lineWidth = 0.6 + (i % 3) * 0.3;
                 ctx.beginPath();
                 ctx.moveTo(rx, ry);
                 ctx.lineTo(rx + Math.cos(windAngle + 1.2) * len, ry + Math.sin(windAngle + 1.2) * len);
                 ctx.stroke();
             }
 
-            // Misty overlay
-            ctx.fillStyle = `rgba(100, 120, 140, ${stormIntensity * 0.06})`;
+            // Lightning flash (rare, random)
+            if (stormIntensity > 0.6 && Math.sin(t * 0.017) > 0.998) {
+                ctx.fillStyle = `rgba(200, 210, 230, ${0.06 + Math.random() * 0.04})`;
+                ctx.fillRect(0, 0, this.width, this.height);
+            }
+
+            // Misty haze overlay
+            ctx.fillStyle = `rgba(90, 110, 130, ${stormIntensity * 0.07})`;
             ctx.fillRect(0, 0, this.width, this.height);
         }
 
-        // Calm/good weather: subtle sun rays (when wind is gentle)
+        // Calm/good weather: warm golden light
         if (windStrength < 1.0) {
             const calmness = (1.0 - windStrength);
-            // Subtle warm overlay in upper-right
+            // Warm sun glow from upper-right
             const sunGrd = ctx.createRadialGradient(
-                this.width * 0.85, this.height * 0.05, 0,
-                this.width * 0.85, this.height * 0.05, this.width * 0.5
+                this.width * 0.88, this.height * 0.02, 0,
+                this.width * 0.88, this.height * 0.02, this.width * 0.55
             );
-            sunGrd.addColorStop(0, `rgba(255, 240, 200, ${calmness * 0.04})`);
-            sunGrd.addColorStop(0.4, `rgba(255, 230, 180, ${calmness * 0.02})`);
-            sunGrd.addColorStop(1, 'rgba(255, 230, 180, 0)');
+            sunGrd.addColorStop(0, `rgba(255, 235, 180, ${calmness * 0.06})`);
+            sunGrd.addColorStop(0.3, `rgba(255, 225, 160, ${calmness * 0.03})`);
+            sunGrd.addColorStop(0.7, `rgba(255, 220, 150, ${calmness * 0.01})`);
+            sunGrd.addColorStop(1, 'rgba(255, 220, 150, 0)');
             ctx.fillStyle = sunGrd;
             ctx.fillRect(0, 0, this.width, this.height);
+
+            // Subtle warm color grading
+            if (calmness > 0.5) {
+                ctx.fillStyle = `rgba(255, 245, 220, ${(calmness - 0.5) * 0.02})`;
+                ctx.fillRect(0, 0, this.width, this.height);
+            }
         }
     },
 
@@ -1540,20 +1925,38 @@ const GameMap = {
             const sc = cloud.scale;
 
             ctx.save();
-            ctx.globalAlpha = cloud.opacity;
-            ctx.fillStyle = 'rgba(200, 210, 225, 0.5)';
 
+            // Cloud shadow on the ground/sea below
+            ctx.globalAlpha = cloud.opacity * 0.4;
+            ctx.fillStyle = 'rgba(10, 20, 40, 0.3)';
+            cloud.blobs.forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(cx + b.ox * sc + 15, cy + b.oy * sc + 40, b.rx * sc * 0.9, b.ry * sc * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Main cloud body (base layer, slightly dark)
+            ctx.globalAlpha = cloud.opacity;
+            ctx.fillStyle = 'rgba(185, 200, 220, 0.5)';
             cloud.blobs.forEach(b => {
                 ctx.beginPath();
                 ctx.ellipse(cx + b.ox * sc, cy + b.oy * sc, b.rx * sc, b.ry * sc, 0, 0, Math.PI * 2);
                 ctx.fill();
             });
 
-            // Highlight on top
-            ctx.fillStyle = 'rgba(230, 240, 255, 0.3)';
+            // Middle brighter layer
+            ctx.fillStyle = 'rgba(210, 220, 235, 0.4)';
             cloud.blobs.forEach(b => {
                 ctx.beginPath();
-                ctx.ellipse(cx + b.ox * sc, cy + (b.oy - 2) * sc, b.rx * sc * 0.7, b.ry * sc * 0.5, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + b.ox * sc, cy + (b.oy - 1) * sc, b.rx * sc * 0.85, b.ry * sc * 0.75, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Top highlight (sunlit edge)
+            ctx.fillStyle = 'rgba(240, 245, 255, 0.35)';
+            cloud.blobs.forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(cx + b.ox * sc + 2, cy + (b.oy - 3) * sc, b.rx * sc * 0.6, b.ry * sc * 0.4, 0, 0, Math.PI * 2);
                 ctx.fill();
             });
 
@@ -1564,42 +1967,82 @@ const GameMap = {
 
     drawCompass(ctx, gameState) {
         if (!gameState) return;
-        const cx = this.width - 45;
-        const cy = this.height - 45;
-        const r = 28;
+        const cx = this.width - 50;
+        const cy = this.height - 50;
+        const r = 32;
         const t = this.animFrame;
 
-        // Background circle
-        ctx.globalAlpha = 0.7;
-        ctx.fillStyle = 'rgba(20, 35, 60, 0.85)';
+        ctx.save();
+
+        // Outer glow
+        ctx.globalAlpha = 0.3;
+        const glow = ctx.createRadialGradient(cx, cy, r - 2, cx, cy, r + 8);
+        glow.addColorStop(0, 'rgba(180, 160, 100, 0.3)');
+        glow.addColorStop(1, 'rgba(180, 160, 100, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Background circle with gradient
+        ctx.globalAlpha = 0.8;
+        const bgGrad = ctx.createRadialGradient(cx - 4, cy - 4, 0, cx, cy, r + 2);
+        bgGrad.addColorStop(0, 'rgba(35, 50, 75, 0.9)');
+        bgGrad.addColorStop(1, 'rgba(15, 25, 45, 0.95)');
+        ctx.fillStyle = bgGrad;
         ctx.beginPath();
         ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(180, 160, 100, 0.5)';
-        ctx.lineWidth = 1;
+
+        // Ornate border rings
+        ctx.strokeStyle = 'rgba(190, 170, 110, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(160, 140, 90, 0.3)';
+        ctx.lineWidth = 0.8;
         ctx.stroke();
         ctx.globalAlpha = 1;
 
-        // Cardinal points
+        // Compass star points (8 directions)
+        for (let i = 0; i < 8; i++) {
+            const a = (i * Math.PI / 4) - Math.PI / 2;
+            const isCardinal = i % 2 === 0;
+            const len = isCardinal ? r - 8 : r - 14;
+            ctx.strokeStyle = isCardinal ? 'rgba(190, 170, 110, 0.5)' : 'rgba(150, 135, 90, 0.25)';
+            ctx.lineWidth = isCardinal ? 1 : 0.5;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+            ctx.stroke();
+        }
+
+        // Cardinal point labels
         const dirs = ['N', 'O', 'S', 'W'];
-        ctx.font = 'bold 8px sans-serif';
+        ctx.font = 'bold 9px serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         dirs.forEach((d, i) => {
             const a = (i * Math.PI / 2) - Math.PI / 2;
-            ctx.fillStyle = d === 'N' ? '#c0392b' : '#a09070';
-            ctx.fillText(d, cx + Math.cos(a) * (r - 6), cy + Math.sin(a) * (r - 6));
+            ctx.fillStyle = d === 'N' ? '#c0392b' : 'rgba(200, 185, 140, 0.9)';
+            ctx.fillText(d, cx + Math.cos(a) * (r - 7), cy + Math.sin(a) * (r - 7));
         });
 
-        // Wind arrow
+        // Wind arrow with glow
         const windAngle = (gameState.wind.direction * Math.PI / 4) - Math.PI / 2;
-        const windLen = 12 + gameState.wind.strength * 4;
+        const windLen = 14 + gameState.wind.strength * 4;
+
+        // Arrow glow
+        ctx.shadowColor = 'rgba(93, 173, 226, 0.5)';
+        ctx.shadowBlur = 4;
         ctx.strokeStyle = '#5dade2';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(cx + Math.cos(windAngle) * windLen, cy + Math.sin(windAngle) * windLen);
         ctx.stroke();
+        ctx.shadowBlur = 0;
 
         // Arrowhead
         const ax = cx + Math.cos(windAngle) * windLen;
@@ -1607,10 +2050,18 @@ const GameMap = {
         ctx.fillStyle = '#5dade2';
         ctx.beginPath();
         ctx.moveTo(ax, ay);
-        ctx.lineTo(ax - Math.cos(windAngle - 0.4) * 5, ay - Math.sin(windAngle - 0.4) * 5);
-        ctx.lineTo(ax - Math.cos(windAngle + 0.4) * 5, ay - Math.sin(windAngle + 0.4) * 5);
+        ctx.lineTo(ax - Math.cos(windAngle - 0.4) * 6, ay - Math.sin(windAngle - 0.4) * 6);
+        ctx.lineTo(ax - Math.cos(windAngle + 0.4) * 6, ay - Math.sin(windAngle + 0.4) * 6);
         ctx.closePath();
         ctx.fill();
+
+        // Center pin
+        ctx.fillStyle = 'rgba(200, 180, 120, 0.8)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     },
 
     onMouseMove(e) {
