@@ -90,6 +90,10 @@ const UI = {
         GameMap.selectedCity = cityId;
         this.switchTab('city');
         this.updateCityTab();
+        // Port ambient sounds
+        if (typeof Sound !== 'undefined' && Sound.playPortAmbient) {
+            Sound.playPortAmbient();
+        }
     },
 
     updateCityTab() {
@@ -1048,6 +1052,15 @@ const UI = {
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Handelsvolumen:</span><span>${Utils.formatGold(totalTraded)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Tage gespielt:</span><span>${daysPlayed}</span></div>
                 <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}/${Reputation.getMaxShips(Game.state)}</span></div>
+            </div>
+            <div style="font-size:11px;margin-bottom:12px;padding:8px;background:rgba(15,52,96,0.2);border-radius:4px">
+                <div style="margin-bottom:6px"><span>Lautstaerke:</span>
+                    <input type="range" min="0" max="100" value="${Math.round(Sound.masterVolume * 100)}" style="width:100%;accent-color:var(--accent)" oninput="Sound.setMasterVolume(this.value/100)">
+                </div>
+                <div style="display:flex;gap:8px">
+                    <label style="flex:1">Musik <input type="range" min="0" max="100" value="${Math.round(Sound.musicVolume * 100)}" style="width:100%;accent-color:var(--accent)" oninput="Sound.setMusicVolume(this.value/100)"></label>
+                    <label style="flex:1">Effekte <input type="range" min="0" max="100" value="${Math.round(Sound.sfxVolume * 100)}" style="width:100%;accent-color:var(--accent)" oninput="Sound.setSfxVolume(this.value/100)"></label>
+                </div>
             </div>
             <div class="modal-buttons" style="flex-direction:column;gap:8px">
                 <button class="modal-btn primary" onclick="Game.save();UI.showNotification('Gespeichert!','success');UI.hideModal()">Spiel speichern</button>

@@ -26,6 +26,7 @@
             showScreen('game-screen');
             TitleCanvas.stop();
             Sound.startAmbient();
+            Sound.startMusic();
         } else {
             alert('Kein gespeichertes Spiel gefunden.');
         }
@@ -53,6 +54,7 @@
         showScreen('game-screen');
         Game.newGame(playerName, homeCity, difficulty);
         Sound.startAmbient();
+        Sound.startMusic();
     });
 
     document.getElementById('btn-back-title').addEventListener('click', () => {

@@ -138,6 +138,11 @@ const Game = {
         // Render
         GameMap.render(this.state);
 
+        // Update ambient sound parameters
+        if (typeof Sound !== 'undefined' && Sound.updateAmbient) {
+            Sound.updateAmbient(this.state);
+        }
+
         requestAnimationFrame(() => this.gameLoop());
     },
 
@@ -447,7 +452,7 @@ const Game = {
     returnToTitle() {
         this.running = false;
         this.state = null;
-        Sound.stopAmbient();
+        Sound.stopAll();
         document.getElementById('game-screen').classList.remove('active');
         document.getElementById('title-screen').classList.add('active');
         TitleCanvas.start();

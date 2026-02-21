@@ -63,6 +63,121 @@ const SimplexNoise = (() => {
     };
 })();
 
+// --- Reusable Particle Pool with object pooling ---
+class ParticlePool {
+    constructor(maxSize = 300) {
+        this.pool = [];
+        this.active = [];
+        this.maxSize = maxSize;
+    }
+
+    _create() {
+        return { x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1, size: 1, decay: 0.01,
+                 color: '#fff', alpha: 1, sizeDecay: 0, gravity: 0, windFactor: 0,
+                 type: 'circle', rotation: 0, rotSpeed: 0, data: null };
+    }
+
+    spawn(opts) {
+        let p = this.pool.pop() || this._create();
+        p.x = opts.x || 0;
+        p.y = opts.y || 0;
+        p.vx = opts.vx || 0;
+        p.vy = opts.vy || 0;
+        p.life = opts.life || 1;
+        p.maxLife = opts.life || 1;
+        p.size = opts.size || 1;
+        p.decay = opts.decay || 0.01;
+        p.color = opts.color || '#fff';
+        p.alpha = opts.alpha || 1;
+        p.sizeDecay = opts.sizeDecay || 0;
+        p.gravity = opts.gravity || 0;
+        p.windFactor = opts.windFactor || 0;
+        p.type = opts.type || 'circle';
+        p.rotation = opts.rotation || 0;
+        p.rotSpeed = opts.rotSpeed || 0;
+        p.data = opts.data || null;
+        if (this.active.length < this.maxSize) {
+            this.active.push(p);
+        } else {
+            this.pool.push(p);
+        }
+        return p;
+    }
+
+    update(windX, windY) {
+        for (let i = this.active.length - 1; i >= 0; i--) {
+            const p = this.active[i];
+            p.life -= p.decay;
+            if (p.life <= 0) {
+                this.active.splice(i, 1);
+                this.pool.push(p);
+                continue;
+            }
+            p.x += p.vx + windX * p.windFactor;
+            p.y += p.vy + windY * p.windFactor;
+            p.vy += p.gravity;
+            p.size = Math.max(0.1, p.size + p.sizeDecay);
+            p.rotation += p.rotSpeed;
+        }
+    }
+
+    draw(ctx, cam) {
+        for (let i = 0; i < this.active.length; i++) {
+            const p = this.active[i];
+            const a = p.alpha * (p.life / p.maxLife);
+            if (a < 0.005) continue;
+            ctx.globalAlpha = a;
+            ctx.fillStyle = p.color;
+            if (p.type === 'circle') {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (p.type === 'rect') {
+                ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size * 0.4);
+            } else if (p.type === 'line') {
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = p.size * 0.3;
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p.x + p.vx * 4, p.y + p.vy * 4);
+                ctx.stroke();
+            } else if (p.type === 'flake') {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = a * 0.5;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    drawWorld(ctx, map) {
+        for (let i = 0; i < this.active.length; i++) {
+            const p = this.active[i];
+            const a = p.alpha * (p.life / p.maxLife);
+            if (a < 0.005) continue;
+            const sp = map.worldToScreen(p.x, p.y);
+            const ss = p.size * map.scale;
+            if (sp.x < -20 || sp.x > map.width + 20 || sp.y < -20 || sp.y > map.height + 20) continue;
+            ctx.globalAlpha = a;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, ss, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    clear() {
+        while (this.active.length > 0) this.pool.push(this.active.pop());
+    }
+
+    get count() { return this.active.length; }
+}
+
 const GameMap = {
     canvas: null,
     ctx: null,
@@ -138,6 +253,17 @@ const GameMap = {
     // Touch pinch state
     pinchStartDist: 0,
     pinchStartZoom: 1,
+
+    // Particle pools (object-pooled)
+    rainPool: new ParticlePool(400),
+    snowPool: new ParticlePool(300),
+    fogPool: new ParticlePool(30),
+    marketPool: new ParticlePool(80),
+    cityGlowPool: new ParticlePool(60),
+
+    // Docked ship positions per city (cached)
+    _dockedShipCache: {},
+    _dockedShipCacheTick: -1,
 
     init() {
         this.canvas = document.getElementById('game-map');
@@ -370,6 +496,9 @@ const GameMap = {
         // Animated water
         this.drawSea(ctx);
 
+        // Wind current lines on water
+        this.drawWindCurrents(ctx, gameState);
+
         // Sea sparkles
         this.drawSparkles(ctx);
 
@@ -404,8 +533,23 @@ const GameMap = {
         // Harbor smoke particles (behind city labels)
         this.drawHarborSmoke(ctx, gameState);
 
+        // City glow (behind cities)
+        this.drawCityGlow(ctx, gameState);
+
+        // Pier/dock details
+        this.drawPiers(ctx, gameState);
+
         // Cities on top
         this.drawCities(ctx, gameState);
+
+        // Night windows overlay on cities
+        this.drawNightWindows(ctx, gameState);
+
+        // Market activity dots near cities
+        this.drawMarketActivity(ctx, gameState);
+
+        // Production icons at high zoom
+        this.drawProductionIcons(ctx, gameState);
 
         // Lighthouse beacons
         this.drawLighthouses(ctx, gameState);
@@ -599,6 +743,55 @@ const GameMap = {
             }
         }
         ctx.globalAlpha = 1;
+    },
+
+    // --- Wind current lines showing wind direction on water ---
+    drawWindCurrents(ctx, gameState) {
+        if (!gameState || !gameState.wind) return;
+        const t = this.animFrame;
+        const windAngle = gameState.wind.direction * Math.PI / 4;
+        const windStr = gameState.wind.strength;
+        if (windStr < 0.3) return; // No visible currents in calm weather
+
+        const dx = Math.cos(windAngle);
+        const dy = Math.sin(windAngle);
+        const lineCount = Math.floor(8 + windStr * 6);
+        const alpha = Utils.clamp(windStr * 0.025, 0.01, 0.06);
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(120, 180, 230, ${alpha})`;
+        ctx.lineWidth = 0.8;
+        ctx.lineCap = 'round';
+
+        for (let i = 0; i < lineCount; i++) {
+            // Distribute lines across the screen using hash-like positioning
+            const seed = i * 173 + 37;
+            const baseX = ((seed * 7 + t * dx * 1.5) % (this.width + 200)) - 100;
+            const baseY = ((seed * 13 + t * dy * 1.5) % (this.height + 200)) - 100;
+            const len = 30 + windStr * 20 + Math.sin(seed) * 10;
+            const waviness = Math.sin(t * 0.01 + i * 0.8) * 3;
+
+            ctx.beginPath();
+            ctx.moveTo(baseX, baseY + waviness);
+            ctx.quadraticCurveTo(
+                baseX + dx * len * 0.5, baseY + dy * len * 0.5 + waviness * 0.5,
+                baseX + dx * len, baseY + dy * len
+            );
+            ctx.stroke();
+
+            // Small arrow tip
+            if (windStr > 1.0) {
+                const tipX = baseX + dx * len;
+                const tipY = baseY + dy * len;
+                ctx.beginPath();
+                ctx.moveTo(tipX, tipY);
+                ctx.lineTo(tipX - dx * 4 + dy * 3, tipY - dy * 4 - dx * 3);
+                ctx.moveTo(tipX, tipY);
+                ctx.lineTo(tipX - dx * 4 - dy * 3, tipY - dy * 4 + dx * 3);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
     },
 
     drawSparkles(ctx) {
@@ -1100,31 +1293,58 @@ const GameMap = {
 
     drawRoutes(ctx, gameState) {
         const t = this.animFrame;
+        const zoom = this.camera.zoom;
 
         SEA_ROUTES.forEach(route => {
             const from = CITIES_DATA[route.from];
             const to = CITIES_DATA[route.to];
             if (!from || !to) return;
+
+            // Frustum culling: skip if both endpoints are offscreen
+            if (!this.isInViewport(from.x, from.y, 50) && !this.isInViewport(to.x, to.y, 50)) return;
+
             const p1 = this.worldToScreen(from.x, from.y);
             const p2 = this.worldToScreen(to.x, to.y);
 
-            // Check if any player ship is on this route
+            // Check if any player ship is on this route and calculate trade volume
             let isActive = false;
+            let tradeVolume = 0;
+            let cargoValue = 0;
             if (gameState && gameState.player) {
-                isActive = gameState.player.ships.some(s => {
-                    if (s.status !== 'sailing' || !s.route) return false;
+                gameState.player.ships.forEach(s => {
+                    if (s.status !== 'sailing' || !s.route) return;
                     for (let i = 0; i < s.route.length - 1; i++) {
                         if ((s.route[i] === route.from && s.route[i+1] === route.to) ||
-                            (s.route[i] === route.to && s.route[i+1] === route.from)) return true;
+                            (s.route[i] === route.to && s.route[i+1] === route.from)) {
+                            isActive = true;
+                            tradeVolume += getCargoCount(s);
+                            // Estimate cargo value for profitability color
+                            for (const goodId in s.cargo) {
+                                const good = typeof GOODS !== 'undefined' ? GOODS[goodId] : null;
+                                cargoValue += s.cargo[goodId] * (good ? good.basePrice : 50);
+                            }
+                        }
                     }
-                    return false;
                 });
             }
 
             if (isActive) {
-                // Animated dashes for active routes
-                ctx.strokeStyle = 'rgba(230, 168, 23, 0.35)';
-                ctx.lineWidth = 2;
+                // Route thickness based on trade volume (1-4 px)
+                const thickness = Utils.clamp(1.5 + tradeVolume / 50, 1.5, 4.5);
+
+                // Color-code by profitability (estimate: value per distance)
+                const profitMetric = cargoValue / (route.distance || 1);
+                let routeColor;
+                if (profitMetric > 500) {
+                    routeColor = 'rgba(46, 204, 113, 0.4)'; // green = profitable
+                } else if (profitMetric > 200) {
+                    routeColor = 'rgba(230, 168, 23, 0.4)'; // yellow = moderate
+                } else {
+                    routeColor = 'rgba(231, 76, 60, 0.35)'; // red = low value
+                }
+
+                ctx.strokeStyle = routeColor;
+                ctx.lineWidth = thickness;
                 ctx.setLineDash([6, 8]);
                 ctx.lineDashOffset = -t * 0.5;
             } else {
@@ -1138,6 +1358,36 @@ const GameMap = {
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
             ctx.stroke();
+
+            // --- Goods icons floating along active routes at high zoom ---
+            if (isActive && zoom >= 1.5 && typeof GOODS !== 'undefined') {
+                // Find the ship(s) on this route to get cargo info
+                if (gameState && gameState.player) {
+                    gameState.player.ships.forEach(s => {
+                        if (s.status !== 'sailing' || !s.route) return;
+                        for (let i = 0; i < s.route.length - 1; i++) {
+                            if (!((s.route[i] === route.from && s.route[i+1] === route.to) ||
+                                  (s.route[i] === route.to && s.route[i+1] === route.from))) continue;
+
+                            // Draw top 2 cargo goods as floating icons
+                            const cargoEntries = Object.entries(s.cargo).sort((a, b) => b[1] - a[1]).slice(0, 2);
+                            cargoEntries.forEach(([goodId], gi) => {
+                                const good = GOODS[goodId];
+                                if (!good) return;
+                                // Animate icon position along the route
+                                const iconProgress = ((t * 0.003 + gi * 0.3) % 1);
+                                const ix = p1.x + (p2.x - p1.x) * iconProgress;
+                                const iy = p1.y + (p2.y - p1.y) * iconProgress - 8 - gi * 12;
+                                ctx.font = `${Math.round(9 * this.scale)}px sans-serif`;
+                                ctx.textAlign = 'center';
+                                ctx.globalAlpha = 0.6;
+                                ctx.fillText(good.icon, ix, iy);
+                                ctx.globalAlpha = 1;
+                            });
+                        }
+                    });
+                }
+            }
         });
 
         ctx.setLineDash([]);
@@ -1447,6 +1697,191 @@ const GameMap = {
         ctx.restore();
     },
 
+    // --- City glow based on population/importance ---
+    drawCityGlow(ctx, gameState) {
+        if (!gameState) return;
+        const t = this.animFrame;
+        const month = gameState.date ? gameState.date.month : 6;
+        const seasonDark = this._getSeasonalDarkness(month);
+        // Glow more visible at night/winter
+        const glowMul = 0.6 + seasonDark * 0.8;
+
+        CITY_IDS.forEach(id => {
+            const city = CITIES_DATA[id];
+            if (!this.isInViewport(city.x, city.y, 80)) return;
+            const pos = this.worldToScreen(city.x, city.y);
+            const pop = gameState.cities[id] ? gameState.cities[id].population : city.population;
+            const glowR = (15 + city.importance * 8 + (pop / 5000) * 3) * this.scale;
+            const alpha = Utils.clamp(0.04 + city.importance * 0.015, 0.02, 0.12) * glowMul;
+            const pulse = 1 + Math.sin(t * 0.015 + city.x * 0.1) * 0.1;
+
+            const grd = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowR * pulse);
+            grd.addColorStop(0, `rgba(255, 220, 140, ${alpha})`);
+            grd.addColorStop(0.4, `rgba(255, 200, 100, ${alpha * 0.5})`);
+            grd.addColorStop(1, 'rgba(255, 180, 80, 0)');
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, glowR * pulse, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    },
+
+    // --- Glowing windows at night (warm yellow dots) ---
+    drawNightWindows(ctx, gameState) {
+        if (!gameState || !gameState.date) return;
+        const month = gameState.date.month;
+        const seasonDark = this._getSeasonalDarkness(month);
+        if (seasonDark < 0.3) return; // Only in darker months
+        if (this.camera.zoom < 1.0) return; // Only when zoomed in enough
+
+        const t = this.animFrame;
+        const alpha = Utils.clamp(seasonDark - 0.3, 0, 0.7) * 0.8;
+
+        CITY_IDS.forEach(id => {
+            const city = CITIES_DATA[id];
+            if (!this.isInViewport(city.x, city.y, 40)) return;
+            if (city.importance < 2) return;
+
+            const pos = this.worldToScreen(city.x, city.y);
+            const s = this.scale;
+            const windowCount = city.importance * 2 + 2;
+
+            ctx.fillStyle = `rgba(255, 220, 100, ${alpha})`;
+            for (let i = 0; i < windowCount; i++) {
+                // Pseudo-random placement around city using deterministic seed
+                const seed = (city.x * 7 + city.y * 13 + i * 31) % 97;
+                const ox = ((seed % 11) - 5) * 2.5 * s;
+                const oy = ((seed % 7) - 3.5) * 2 * s - 3 * s;
+                // Flicker
+                const flicker = Math.sin(t * 0.03 + seed * 0.7) > -0.2 ? 1 : 0.2;
+                ctx.globalAlpha = alpha * flicker;
+                ctx.fillRect(pos.x + ox, pos.y + oy, 1.5 * s, 1.8 * s);
+            }
+        });
+        ctx.globalAlpha = 1;
+    },
+
+    // --- Market activity: tiny animated dots moving near cities ---
+    drawMarketActivity(ctx, gameState) {
+        if (!gameState) return;
+        if (this.camera.zoom < 1.3) return; // Only when zoomed in
+
+        const t = this.animFrame;
+        const windX = gameState.wind ? Math.cos(gameState.wind.direction * Math.PI / 4) * 0.05 : 0;
+        const windY = gameState.wind ? Math.sin(gameState.wind.direction * Math.PI / 4) * 0.05 : 0;
+
+        // Spawn market activity particles
+        if (t % 12 === 0) {
+            CITY_IDS.forEach(id => {
+                const city = CITIES_DATA[id];
+                if (!this.isInViewport(city.x, city.y, 40)) return;
+                if (city.importance < 3) return;
+                const pos = this.worldToScreen(city.x, city.y);
+                this.marketPool.spawn({
+                    x: pos.x + (Math.random() - 0.5) * 20 * this.scale,
+                    y: pos.y + (Math.random() - 0.5) * 15 * this.scale,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.3,
+                    life: 1.0,
+                    decay: 0.015,
+                    size: 1 + Math.random() * 1.5,
+                    color: Math.random() > 0.5 ? 'rgba(180, 160, 120, 0.6)' : 'rgba(160, 140, 100, 0.5)',
+                    alpha: 0.5
+                });
+            });
+        }
+
+        this.marketPool.update(windX, windY);
+        this.marketPool.draw(ctx);
+    },
+
+    // --- Port area: pier/dock lines near shipyard cities ---
+    drawPiers(ctx, gameState) {
+        if (this.camera.zoom < 1.2) return; // Only when zoomed in
+
+        CITY_IDS.forEach(id => {
+            const city = CITIES_DATA[id];
+            if (!city.hasShipyard) return;
+            if (!this.isInViewport(city.x, city.y, 40)) return;
+
+            const pos = this.worldToScreen(city.x, city.y);
+            const s = this.scale;
+
+            // Draw wooden pier extending into water
+            ctx.save();
+            ctx.strokeStyle = 'rgba(120, 85, 50, 0.5)';
+            ctx.lineWidth = 2 * s;
+            ctx.lineCap = 'round';
+
+            // Main pier
+            ctx.beginPath();
+            ctx.moveTo(pos.x + 8 * s, pos.y + 4 * s);
+            ctx.lineTo(pos.x + 25 * s, pos.y + 8 * s);
+            ctx.stroke();
+
+            // Cross planks
+            ctx.lineWidth = 1 * s;
+            for (let i = 0; i < 3; i++) {
+                const px = pos.x + (12 + i * 5) * s;
+                const py = pos.y + (5 + i * 1.3) * s;
+                ctx.beginPath();
+                ctx.moveTo(px - 2 * s, py - 2 * s);
+                ctx.lineTo(px + 2 * s, py + 2 * s);
+                ctx.stroke();
+            }
+
+            // Mooring posts
+            ctx.fillStyle = 'rgba(90, 65, 35, 0.6)';
+            ctx.beginPath();
+            ctx.arc(pos.x + 25 * s, pos.y + 8 * s, 1.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(pos.x + 8 * s, pos.y + 4 * s, 1.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        });
+    },
+
+    // --- Production icons near cities at high zoom ---
+    drawProductionIcons(ctx, gameState) {
+        if (!gameState) return;
+        if (this.camera.zoom < 2.0) return; // Only at high zoom
+
+        const t = this.animFrame;
+        const GOOD_ICONS = typeof GOODS !== 'undefined' ? GOODS : {};
+
+        CITY_IDS.forEach(id => {
+            const city = CITIES_DATA[id];
+            if (!this.isInViewport(city.x, city.y, 40)) return;
+
+            const produced = Object.entries(city.production)
+                .filter(([, v]) => v > 0)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+            if (produced.length === 0) return;
+
+            const pos = this.worldToScreen(city.x, city.y);
+            const s = this.scale;
+            const startX = pos.x - (produced.length * 8 * s) / 2;
+            const iconY = pos.y + (city.importance >= 3 ? 12 : 8) * s;
+
+            ctx.font = `${Math.round(8 * s)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.globalAlpha = 0.7;
+
+            produced.forEach(([goodId], i) => {
+                const icon = GOOD_ICONS[goodId] ? GOOD_ICONS[goodId].icon : '?';
+                const ix = startX + i * 10 * s;
+                // Subtle float animation
+                const floatY = Math.sin(t * 0.03 + i * 1.2) * 1.5;
+                ctx.fillText(icon, ix, iconY + floatY);
+            });
+            ctx.globalAlpha = 1;
+        });
+    },
+
     drawCityHighlight(ctx, cityId) {
         const city = CITIES_DATA[cityId];
         if (!city) return;
@@ -1460,16 +1895,53 @@ const GameMap = {
         ctx.stroke();
     },
 
-    // Enhanced ship rendering with wakes
+    // Enhanced ship rendering with wakes, wind sails, docked ships
     drawShips(ctx, gameState) {
         if (!gameState || !gameState.player) return;
         const t = this.animFrame;
+        const windDir = gameState.wind ? gameState.wind.direction * Math.PI / 4 : 0;
+        const windStr = gameState.wind ? gameState.wind.strength : 1.0;
+        const zoom = this.camera.zoom;
 
-        // Player ships
+        // --- Docked ships: gentle bobbing in port ---
+        gameState.player.ships.forEach(ship => {
+            if (ship.status !== 'docked' || !ship.location) return;
+            const city = CITIES_DATA[ship.location];
+            if (!city || !this.isInViewport(city.x, city.y, 60)) return;
+            // Only show docked ships at zoom >= 1.2
+            if (zoom < 1.2) return;
+
+            // Offset docked ships slightly from city center (stagger by index)
+            const idx = gameState.player.ships.indexOf(ship);
+            const ox = 15 + idx * 12;
+            const oy = 10 + (idx % 2) * 8;
+            const pos = this.worldToScreen(city.x + ox, city.y + oy);
+            // Gentle bobbing
+            const bob = Math.sin(t * 0.04 + idx * 1.5) * 2 + Math.cos(t * 0.06 + idx * 0.7) * 1;
+            const angle = Math.PI * 0.5 + Math.sin(t * 0.02 + idx) * 0.08; // Mostly facing right with gentle sway
+            this.drawDetailedShip(ctx, pos.x, pos.y + bob, angle, ship, '#c8922a', '#e8dcc0', true, windDir, windStr * 0.3);
+
+            // Ship name at high zoom
+            if (zoom >= 1.5) {
+                ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                ctx.shadowBlur = 2;
+                ctx.font = '8px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = 'rgba(200,180,120,0.7)';
+                ctx.fillText(ship.name, pos.x, pos.y + bob - 14);
+                ctx.shadowBlur = 0;
+            }
+        });
+
+        // --- Sailing player ships ---
         gameState.player.ships.forEach(ship => {
             if (ship.status !== 'sailing' || !ship.route || ship.route.length < 2) return;
             const pos = this.getShipScreenPos(ship, t);
             if (!pos) return;
+
+            // Frustum culling
+            const worldPos = this.getShipWorldPos(ship);
+            if (worldPos && !this.isInViewport(worldPos.x, worldPos.y, 50)) return;
 
             // Add wake particles
             if (t % 3 === 0) {
@@ -1480,7 +1952,7 @@ const GameMap = {
                 });
             }
 
-            this.drawDetailedShip(ctx, pos.x, pos.y, pos.angle, ship, '#e6a817', '#fff', true);
+            this.drawDetailedShip(ctx, pos.x, pos.y, pos.angle, ship, '#e6a817', '#fff', true, windDir, windStr);
 
             // Ship name label
             ctx.shadowColor = 'rgba(0,0,0,0.9)';
@@ -1488,7 +1960,7 @@ const GameMap = {
             ctx.font = 'bold 9px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillStyle = '#ffd700';
-            ctx.fillText(ship.name, pos.x, pos.y - 16);
+            ctx.fillText(ship.name, pos.x, pos.y - 18 * (this._shipTypeScale[ship.typeId] || 1));
             ctx.shadowBlur = 0;
 
             // Hull bar if damaged
@@ -1497,9 +1969,28 @@ const GameMap = {
                 const barH = 3;
                 const hullPct = ship.hull / ship.maxHull;
                 ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.fillRect(pos.x - barW/2, pos.y + 10, barW, barH);
+                ctx.fillRect(pos.x - barW/2, pos.y + 12, barW, barH);
                 ctx.fillStyle = hullPct > 0.5 ? '#27ae60' : (hullPct > 0.25 ? '#f39c12' : '#c0392b');
-                ctx.fillRect(pos.x - barW/2, pos.y + 10, barW * hullPct, barH);
+                ctx.fillRect(pos.x - barW/2, pos.y + 12, barW * hullPct, barH);
+            }
+
+            // Cargo percentage bar at high zoom
+            if (zoom >= 1.8) {
+                const cargoCount = getCargoCount(ship);
+                const cargoPct = cargoCount / ship.capacity;
+                const barW = 24;
+                const barH = 2.5;
+                const barY = ship.hull < ship.maxHull ? 17 : 12;
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(pos.x - barW/2, pos.y + barY, barW, barH);
+                ctx.fillStyle = cargoPct > 0.8 ? '#f39c12' : '#3498db';
+                ctx.fillRect(pos.x - barW/2, pos.y + barY, barW * cargoPct, barH);
+                // Cargo percentage text
+                if (zoom >= 2.5) {
+                    ctx.font = '7px sans-serif';
+                    ctx.fillStyle = 'rgba(200,200,200,0.7)';
+                    ctx.fillText(Math.round(cargoPct * 100) + '%', pos.x, pos.y + barY + barH + 9);
+                }
             }
         });
 
@@ -1520,7 +2011,7 @@ const GameMap = {
                         });
                     }
 
-                    this.drawDetailedShip(ctx, pos.x, pos.y, pos.angle, ship, '#778899', '#ccc', false);
+                    this.drawDetailedShip(ctx, pos.x, pos.y, pos.angle, ship, '#778899', '#ccc', false, windDir, windStr);
                 });
             });
         }
@@ -1554,14 +2045,24 @@ const GameMap = {
         };
     },
 
-    drawDetailedShip(ctx, x, y, angle, ship, hullColor, sailColor, isPlayer) {
+    // Ship type scale map: small_cog=0.7, cog=1.0, hulk=1.2, caravel=0.9, carrack=1.5, warship=1.1
+    _shipTypeScale: { small_cog: 0.7, cog: 1.0, hulk: 1.2, caravel: 0.9, carrack: 1.5, warship: 1.1 },
+
+    drawDetailedShip(ctx, x, y, angle, ship, hullColor, sailColor, isPlayer, windAngle, windStrength) {
         const t = this.animFrame;
-        // Enforce minimum visible size: ships always at least 20px on screen
-        const baseS = isPlayer ? 1.3 : 0.9;
-        const shipWorldSize = isPlayer ? 30 : 20;
+        // Ship type scaling
+        const typeScale = this._shipTypeScale[ship.typeId] || 1.0;
+        const baseS = (isPlayer ? 1.3 : 0.9) * typeScale;
+        const shipWorldSize = (isPlayer ? 30 : 20) * typeScale;
         const shipScreenSize = shipWorldSize * this.scale;
         const shipScale = shipScreenSize < 20 ? (20 / shipScreenSize) : 1.0;
         const s = baseS * shipScale;
+
+        // Wind-based sail flutter: sails billow more when wind is behind the ship
+        windAngle = windAngle || 0;
+        windStrength = windStrength || 1.0;
+        const relativeWind = Math.cos(windAngle - angle);
+        const windBillow = Utils.clamp(relativeWind * windStrength * 0.5 + 0.5, 0.2, 1.5);
 
         ctx.save();
         ctx.translate(x, y);
@@ -1683,9 +2184,9 @@ const GameMap = {
         ctx.lineTo(10 * s, yardY);
         ctx.stroke();
 
-        // --- Square Sail (Rahsegel) - the Kogge trademark ---
-        const flutter = Math.sin(t * 0.08) * 1.5 * s;
-        const flutter2 = Math.sin(t * 0.08 + 1) * 1.0 * s;
+        // --- Square Sail (Rahsegel) - wind-driven billowing ---
+        const flutter = Math.sin(t * 0.08) * 1.5 * s * windBillow;
+        const flutter2 = Math.sin(t * 0.08 + 1) * 1.0 * s * windBillow;
         ctx.fillStyle = sailColor;
         ctx.globalAlpha = 0.92;
         ctx.beginPath();
@@ -1927,39 +2428,132 @@ const GameMap = {
         if (!gameState || !gameState.wind) return;
         const t = this.animFrame;
         const windStrength = gameState.wind.strength;
+        const windAngle = gameState.wind.direction * Math.PI / 4;
+        const windX = Math.cos(windAngle);
+        const windY = Math.sin(windAngle);
+        const month = gameState.date ? gameState.date.month : 6;
 
         // Storm effect when wind is very strong
         if (windStrength > 2.0) {
             const stormIntensity = Math.min((windStrength - 2.0) / 1.0, 1.0);
-            const windAngle = gameState.wind.direction * Math.PI / 4;
 
             // Dark storm sky overlay
             ctx.fillStyle = `rgba(25, 35, 50, ${stormIntensity * 0.08})`;
             ctx.fillRect(0, 0, this.width, this.height);
 
-            // Heavy rain streaks (more, longer, varied)
-            for (let i = 0; i < 60 * stormIntensity; i++) {
-                const rx = ((i * 37 + t * 4) % (this.width + 40)) - 20;
-                const ry = ((i * 53 + t * 6) % (this.height + 40)) - 20;
-                const len = 10 + stormIntensity * 15 + (i % 5) * 2;
-                const alpha = 0.06 + stormIntensity * 0.08 + (i % 3) * 0.02;
-                ctx.strokeStyle = `rgba(160, 190, 220, ${alpha})`;
-                ctx.lineWidth = 0.6 + (i % 3) * 0.3;
-                ctx.beginPath();
-                ctx.moveTo(rx, ry);
-                ctx.lineTo(rx + Math.cos(windAngle + 1.2) * len, ry + Math.sin(windAngle + 1.2) * len);
-                ctx.stroke();
+            // Heavy rain using particle pool
+            if (t % 2 === 0) {
+                for (let i = 0; i < Math.floor(6 * stormIntensity); i++) {
+                    this.rainPool.spawn({
+                        x: Math.random() * (this.width + 100) - 50,
+                        y: -10,
+                        vx: windX * 3 + (Math.random() - 0.5),
+                        vy: 4 + Math.random() * 3,
+                        life: 1.0,
+                        decay: 0.03,
+                        size: 0.8 + Math.random() * 0.5,
+                        color: `rgba(160, 190, 220, ${0.15 + stormIntensity * 0.15})`,
+                        alpha: 0.4 + stormIntensity * 0.3,
+                        type: 'line',
+                        windFactor: 0.5
+                    });
+                }
             }
 
             // Lightning flash (rare, random)
             if (stormIntensity > 0.6 && Math.sin(t * 0.017) > 0.998) {
-                ctx.fillStyle = `rgba(200, 210, 230, ${0.06 + Math.random() * 0.04})`;
+                ctx.fillStyle = `rgba(200, 210, 230, ${0.08 + Math.random() * 0.06})`;
                 ctx.fillRect(0, 0, this.width, this.height);
+                // Lightning bolt shape
+                const lx = Math.random() * this.width;
+                ctx.strokeStyle = `rgba(220, 230, 255, ${0.3 + Math.random() * 0.2})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(lx, 0);
+                let ly = 0;
+                for (let seg = 0; seg < 5; seg++) {
+                    lx + (Math.random() - 0.5) * 40;
+                    ly += this.height * 0.15 + Math.random() * this.height * 0.05;
+                    ctx.lineTo(lx + (Math.random() - 0.5) * 40, ly);
+                }
+                ctx.stroke();
             }
 
             // Misty haze overlay
             ctx.fillStyle = `rgba(90, 110, 130, ${stormIntensity * 0.07})`;
             ctx.fillRect(0, 0, this.width, this.height);
+        }
+
+        // Update and draw rain particles
+        this.rainPool.update(windX * 0.5, windY * 0.2);
+        this.rainPool.draw(ctx);
+
+        // --- Snow particles in winter months (Nov-Feb) ---
+        const isWinter = month >= 11 || month <= 2;
+        if (isWinter) {
+            const winterIntensity = month === 12 || month === 1 ? 1.0 : 0.5;
+            // Spawn snow particles
+            if (t % 3 === 0) {
+                for (let i = 0; i < Math.floor(3 * winterIntensity); i++) {
+                    this.snowPool.spawn({
+                        x: Math.random() * (this.width + 60) - 30,
+                        y: -5,
+                        vx: windX * 0.5 + (Math.random() - 0.5) * 0.3,
+                        vy: 0.5 + Math.random() * 0.8,
+                        life: 1.0,
+                        decay: 0.005 + Math.random() * 0.003,
+                        size: 1 + Math.random() * 2,
+                        color: 'rgba(230, 240, 255, 0.7)',
+                        alpha: 0.4 + Math.random() * 0.3,
+                        type: 'flake',
+                        windFactor: 0.8,
+                        rotSpeed: (Math.random() - 0.5) * 0.05
+                    });
+                }
+            }
+            this.snowPool.update(windX * 0.3, 0);
+            this.snowPool.draw(ctx);
+
+            // Light snow overlay on ground
+            if (winterIntensity > 0.5) {
+                ctx.fillStyle = `rgba(220, 230, 245, ${0.02 * winterIntensity})`;
+                ctx.fillRect(0, 0, this.width, this.height);
+            }
+        }
+
+        // --- Fog patches that drift across the map ---
+        if (windStrength < 1.5 && (month >= 10 || month <= 3)) {
+            const fogChance = (1.5 - windStrength) * (month >= 11 || month <= 2 ? 0.8 : 0.4);
+            if (t % 60 === 0 && Math.random() < fogChance && this.fogPool.count < 15) {
+                this.fogPool.spawn({
+                    x: -100 + Math.random() * 50,
+                    y: Math.random() * this.height,
+                    vx: 0.2 + windX * 0.3,
+                    vy: windY * 0.1 + (Math.random() - 0.5) * 0.05,
+                    life: 1.0,
+                    decay: 0.001,
+                    size: 80 + Math.random() * 120,
+                    color: 'rgba(160, 175, 190, 0.08)',
+                    alpha: 0.05 + Math.random() * 0.04,
+                    windFactor: 0.3,
+                    sizeDecay: 0.05
+                });
+            }
+            this.fogPool.update(windX * 0.1, windY * 0.05);
+            // Custom fog draw (large ellipses)
+            for (let i = 0; i < this.fogPool.active.length; i++) {
+                const f = this.fogPool.active[i];
+                const a = f.alpha * (f.life / f.maxLife);
+                if (a < 0.003) continue;
+                const grd = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
+                grd.addColorStop(0, `rgba(160, 175, 195, ${a})`);
+                grd.addColorStop(0.6, `rgba(140, 160, 180, ${a * 0.5})`);
+                grd.addColorStop(1, 'rgba(130, 150, 170, 0)');
+                ctx.fillStyle = grd;
+                ctx.beginPath();
+                ctx.ellipse(f.x, f.y, f.size, f.size * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         // Calm/good weather: warm golden light
@@ -1982,6 +2576,18 @@ const GameMap = {
                 ctx.fillStyle = `rgba(255, 245, 220, ${(calmness - 0.5) * 0.02})`;
                 ctx.fillRect(0, 0, this.width, this.height);
             }
+        }
+
+        // --- Seasonal color tint overlay (summer=warmer, winter=cooler) ---
+        const seasonDark = this._getSeasonalDarkness(month);
+        if (seasonDark > 0.3) {
+            // Winter: cool blue tint
+            ctx.fillStyle = `rgba(140, 160, 200, ${(seasonDark - 0.3) * 0.04})`;
+            ctx.fillRect(0, 0, this.width, this.height);
+        } else if (seasonDark < 0.15 && month >= 5 && month <= 8) {
+            // Summer: warm golden tint
+            ctx.fillStyle = `rgba(255, 230, 180, ${(0.15 - seasonDark) * 0.06})`;
+            ctx.fillRect(0, 0, this.width, this.height);
         }
     },
 
