@@ -209,8 +209,8 @@ const GameMap = {
     terrainSeed: null,
 
     // --- Camera system ---
-    camera: { x: 600, y: 350, zoom: 1.0 },
-    targetCamera: { x: 600, y: 350, zoom: 1.0 },
+    camera: { x: 550, y: 280, zoom: 1.0 },
+    targetCamera: { x: 550, y: 280, zoom: 1.0 },
     cameraSmoothing: 0.08,
     MIN_ZOOM: 0.5,
     MAX_ZOOM: 4.0,
@@ -1001,23 +1001,23 @@ const GameMap = {
         ctx.lineJoin = 'round';
 
         // Elbe - flows into Hamburg from south
-        const elbe = [[430, 600], [432, 540], [428, 490], [430, 450], [432, 420], [430, 370]];
+        const elbe = [[444, 550], [444, 490], [442, 440], [444, 390], [444, 350], [444, 315]];
         this.drawRiverPath(ctx, elbe, 2.0);
 
         // Oder - flows into Stettin from south
-        const oder = [[610, 600], [615, 530], [618, 480], [615, 440], [616, 400], [615, 370]];
+        const oder = [[600, 550], [602, 490], [600, 440], [598, 390], [600, 350], [600, 315]];
         this.drawRiverPath(ctx, oder, 1.7);
 
         // Weichsel/Vistula - flows into Danzig from south
-        const weichsel = [[718, 600], [722, 530], [725, 470], [720, 420], [720, 380], [720, 340]];
+        const weichsel = [[696, 550], [698, 490], [696, 440], [694, 390], [696, 350], [696, 301]];
         this.drawRiverPath(ctx, weichsel, 1.8);
 
         // Weser - flows near Bremen
-        const weser = [[388, 600], [390, 520], [392, 460], [390, 385]];
+        const weser = [[396, 550], [396, 480], [396, 420], [396, 336]];
         this.drawRiverPath(ctx, weser, 1.3);
 
         // Dvina - flows toward Riga from east
-        const dvina = [[920, 260], [910, 255], [900, 248], [895, 242], [890, 240]];
+        const dvina = [[870, 225], [850, 220], [835, 215], [825, 212], [816, 210]];
         this.drawRiverPath(ctx, dvina, 1.2);
 
         ctx.restore();
@@ -3061,7 +3061,7 @@ const GameMap = {
         switch (e.key) {
             case 'Home':
             case 'h':
-                this.targetCamera = { x: 600, y: 350, zoom: 1.0 };
+                this.targetCamera = { x: 550, y: 280, zoom: 1.0 };
                 this.followingShip = false;
                 break;
             case '+':

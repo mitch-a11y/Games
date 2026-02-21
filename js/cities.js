@@ -6,7 +6,7 @@ const CITIES_DATA = {
     Luebeck: {
         name: 'Luebeck',
         displayName: 'L\u00fcbeck',
-        x: 490, y: 360,
+        x: 504, y: 308,
         population: 25000,
         importance: 5, // 1-5, affects trade volume
         hasShipyard: true,
@@ -17,7 +17,7 @@ const CITIES_DATA = {
     Hamburg: {
         name: 'Hamburg',
         displayName: 'Hamburg',
-        x: 430, y: 370,
+        x: 444, y: 315,
         population: 18000,
         importance: 4,
         hasShipyard: true,
@@ -28,7 +28,7 @@ const CITIES_DATA = {
     Bremen: {
         name: 'Bremen',
         displayName: 'Bremen',
-        x: 390, y: 385,
+        x: 396, y: 336,
         population: 12000,
         importance: 3,
         hasShipyard: true,
@@ -39,7 +39,7 @@ const CITIES_DATA = {
     Rostock: {
         name: 'Rostock',
         displayName: 'Rostock',
-        x: 540, y: 340,
+        x: 540, y: 294,
         population: 12000,
         importance: 3,
         hasShipyard: true,
@@ -50,7 +50,7 @@ const CITIES_DATA = {
     Wismar: {
         name: 'Wismar',
         displayName: 'Wismar',
-        x: 510, y: 348,
+        x: 520, y: 300,
         population: 8000,
         importance: 2,
         hasShipyard: false,
@@ -61,7 +61,7 @@ const CITIES_DATA = {
     Stralsund: {
         name: 'Stralsund',
         displayName: 'Stralsund',
-        x: 580, y: 320,
+        x: 564, y: 280,
         population: 10000,
         importance: 3,
         hasShipyard: true,
@@ -72,7 +72,7 @@ const CITIES_DATA = {
     Stettin: {
         name: 'Stettin',
         displayName: 'Stettin',
-        x: 615, y: 370,
+        x: 600, y: 315,
         population: 9000,
         importance: 2,
         hasShipyard: true,
@@ -83,7 +83,7 @@ const CITIES_DATA = {
     Danzig: {
         name: 'Danzig',
         displayName: 'Danzig',
-        x: 720, y: 340,
+        x: 696, y: 301,
         population: 20000,
         importance: 4,
         hasShipyard: true,
@@ -94,7 +94,7 @@ const CITIES_DATA = {
     Koenigsberg: {
         name: 'Koenigsberg',
         displayName: 'K\u00f6nigsberg',
-        x: 810, y: 310,
+        x: 744, y: 266,
         population: 10000,
         importance: 3,
         hasShipyard: true,
@@ -105,7 +105,7 @@ const CITIES_DATA = {
     Riga: {
         name: 'Riga',
         displayName: 'Riga',
-        x: 890, y: 240,
+        x: 816, y: 210,
         population: 12000,
         importance: 3,
         hasShipyard: true,
@@ -116,7 +116,7 @@ const CITIES_DATA = {
     Reval: {
         name: 'Reval',
         displayName: 'Reval',
-        x: 920, y: 170,
+        x: 780, y: 126,
         population: 8000,
         importance: 3,
         hasShipyard: true,
@@ -127,7 +127,7 @@ const CITIES_DATA = {
     Stockholm: {
         name: 'Stockholm',
         displayName: 'Stockholm',
-        x: 740, y: 150,
+        x: 624, y: 105,
         population: 7000,
         importance: 3,
         hasShipyard: true,
@@ -138,7 +138,7 @@ const CITIES_DATA = {
     Visby: {
         name: 'Visby',
         displayName: 'Visby',
-        x: 700, y: 220,
+        x: 660, y: 175,
         population: 6000,
         importance: 3,
         hasShipyard: false,
@@ -149,7 +149,7 @@ const CITIES_DATA = {
     Bergen: {
         name: 'Bergen',
         displayName: 'Bergen',
-        x: 280, y: 140,
+        x: 264, y: 84,
         population: 9000,
         importance: 3,
         hasShipyard: true,
@@ -160,7 +160,7 @@ const CITIES_DATA = {
     Brugge: {
         name: 'Brugge',
         displayName: 'Br\u00fcgge',
-        x: 270, y: 430,
+        x: 264, y: 406,
         population: 35000,
         importance: 5,
         hasShipyard: true,
@@ -171,7 +171,7 @@ const CITIES_DATA = {
     London: {
         name: 'London',
         displayName: 'London',
-        x: 210, y: 445,
+        x: 216, y: 385,
         population: 40000,
         importance: 4,
         hasShipyard: true,
@@ -182,7 +182,7 @@ const CITIES_DATA = {
     Novgorod: {
         name: 'Novgorod',
         displayName: 'Nowgorod',
-        x: 1010, y: 130,
+        x: 900, y: 154,
         population: 15000,
         importance: 4,
         hasShipyard: false,
