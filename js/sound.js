@@ -8,8 +8,10 @@ const Sound = {
     volume: 0.5,
     sfxVolume: 0.6,
     ambientVolume: 0.3,
+    musicVolume: 0.45,   // Separate music volume (menu + ingame tracks)
     musicPlaying: false,
     buffers: {},      // Loaded audio buffers
+    musicBuffers: {}, // Music track buffers (loaded separately)
     loading: false,
     loaded: false,
     ambientSource: null,
@@ -17,7 +19,16 @@ const Sound = {
     portAmbientSource: null,
     portAmbientGain: null,
     currentAmbient: null,  // 'ocean', 'port', or 'title'
-    titleAmbientNodes: null,  // synth ambient for title screen
+    titleAmbientNodes: null,  // synth ambient fallback for title screen
+
+    // Music system
+    menuMusicSource: null,
+    menuMusicGain: null,
+    ingameMusicSource: null,
+    ingameMusicGain: null,
+    currentIngameTrack: -1,
+    ingameTrackOrder: [],
+    musicFadeTime: 2.0,    // seconds for crossfade
 
     // All sound files to preload
     SOUNDS: {
@@ -42,20 +53,31 @@ const Sound = {
         port:        'assets/sounds/port_ambient.wav'
     },
 
+    // Music tracks (loaded separately from SFX)
+    MUSIC: {
+        menu:     'assets/music/menu_ambient.mp3',
+        ingame_1: 'assets/music/ingame_1.mp3',
+        ingame_2: 'assets/music/ingame_2.mp3',
+        ingame_3: 'assets/music/ingame_3.mp3'
+    },
+
     async init() {
         // Load saved settings from localStorage
         this.loadSettings();
 
         try {
-            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!this.ctx) {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            }
         } catch (e) {
             console.warn('Web Audio not supported');
             this.enabled = false;
             return;
         }
 
-        // Start preloading sounds
+        // Start preloading sounds + music
         this.preloadAll();
+        this.preloadMusic();
     },
 
     // Persist sound settings to localStorage
@@ -65,7 +87,8 @@ const Sound = {
                 enabled: this.enabled,
                 volume: this.volume,
                 sfxVolume: this.sfxVolume,
-                ambientVolume: this.ambientVolume
+                ambientVolume: this.ambientVolume,
+                musicVolume: this.musicVolume
             }));
         } catch (e) { /* localStorage not available */ }
     },
@@ -79,6 +102,7 @@ const Sound = {
                 if (typeof s.volume === 'number') this.volume = s.volume;
                 if (typeof s.sfxVolume === 'number') this.sfxVolume = s.sfxVolume;
                 if (typeof s.ambientVolume === 'number') this.ambientVolume = s.ambientVolume;
+                if (typeof s.musicVolume === 'number') this.musicVolume = s.musicVolume;
             }
         } catch (e) { /* localStorage not available */ }
     },
@@ -112,6 +136,213 @@ const Sound = {
         this.loaded = true;
         this.loading = false;
         console.log(`Sound: ${loaded}/${entries.length} sounds loaded`);
+    },
+
+    // ==========================================
+    // MUSIC PRELOADER (separate from SFX)
+    // ==========================================
+    async preloadMusic() {
+        if (!this.ctx) return;
+        const entries = Object.entries(this.MUSIC);
+        let loaded = 0;
+
+        const promises = entries.map(async ([name, url]) => {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const arrayBuffer = await response.arrayBuffer();
+                this.musicBuffers[name] = await this.ctx.decodeAudioData(arrayBuffer);
+                loaded++;
+            } catch (e) {
+                console.warn(`Music load failed: ${name} (${url})`, e.message);
+            }
+        });
+
+        await Promise.all(promises);
+        console.log(`Music: ${loaded}/${entries.length} tracks loaded`);
+    },
+
+    // ==========================================
+    // MENU MUSIC (title screen)
+    // ==========================================
+    startMenuMusic() {
+        if (!this.enabled || !this.ctx) return;
+        this.resume();
+
+        // Already playing?
+        if (this.menuMusicSource) return;
+
+        const buffer = this.musicBuffers.menu;
+        if (!buffer) {
+            // Fallback to synth ambient if music not loaded yet
+            this.startTitleAmbient();
+            return;
+        }
+
+        // Stop synth ambient if it was playing as fallback
+        this.stopTitleAmbient();
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        // Fade in over 2.5 seconds
+        gain.gain.linearRampToValueAtTime(
+            this.musicVolume * this.volume,
+            this.ctx.currentTime + 2.5
+        );
+
+        source.connect(gain);
+        gain.connect(this.ctx.destination);
+        source.start(0);
+
+        this.menuMusicSource = source;
+        this.menuMusicGain = gain;
+    },
+
+    stopMenuMusic() {
+        if (!this.menuMusicSource) return;
+        const source = this.menuMusicSource;
+        const gain = this.menuMusicGain;
+
+        try {
+            gain.gain.cancelScheduledValues(this.ctx.currentTime);
+            gain.gain.setValueAtTime(gain.gain.value, this.ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + this.musicFadeTime);
+            setTimeout(() => {
+                try { source.stop(); } catch (e) {}
+                try { gain.disconnect(); } catch (e) {}
+            }, this.musicFadeTime * 1000 + 200);
+        } catch (e) {
+            try { source.stop(); } catch (e2) {}
+        }
+
+        this.menuMusicSource = null;
+        this.menuMusicGain = null;
+    },
+
+    // ==========================================
+    // INGAME MUSIC (shuffled 3 tracks, crossfade)
+    // ==========================================
+    startIngameMusic() {
+        if (!this.enabled || !this.ctx) return;
+        this.resume();
+
+        // Already playing?
+        if (this.ingameMusicSource) return;
+
+        // Build shuffled track order
+        this.ingameTrackOrder = [1, 2, 3].sort(() => Math.random() - 0.5);
+        this.currentIngameTrack = -1;
+
+        this._playNextIngameTrack();
+    },
+
+    _playNextIngameTrack() {
+        if (!this.enabled || !this.ctx) return;
+
+        this.currentIngameTrack++;
+        if (this.currentIngameTrack >= this.ingameTrackOrder.length) {
+            // Reshuffle and restart
+            this.ingameTrackOrder = [1, 2, 3].sort(() => Math.random() - 0.5);
+            this.currentIngameTrack = 0;
+        }
+
+        const trackNum = this.ingameTrackOrder[this.currentIngameTrack];
+        const buffer = this.musicBuffers[`ingame_${trackNum}`];
+        if (!buffer) {
+            console.warn(`Ingame track ${trackNum} not loaded`);
+            return;
+        }
+
+        // Clean up previous source
+        if (this.ingameMusicSource) {
+            try { this.ingameMusicSource.stop(); } catch (e) {}
+        }
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = false; // Don't loop individual tracks
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        gain.gain.linearRampToValueAtTime(
+            this.musicVolume * this.volume,
+            this.ctx.currentTime + this.musicFadeTime
+        );
+
+        source.connect(gain);
+        gain.connect(this.ctx.destination);
+        source.start(0);
+
+        this.ingameMusicSource = source;
+        this.ingameMusicGain = gain;
+
+        // When track ends, crossfade to next
+        source.onended = () => {
+            if (this.ingameMusicSource === source) {
+                this.ingameMusicSource = null;
+                this.ingameMusicGain = null;
+                // Small gap then next track
+                setTimeout(() => this._playNextIngameTrack(), 800);
+            }
+        };
+
+        // Schedule fade-out near the end
+        const fadeOutStart = Math.max(0, buffer.duration - this.musicFadeTime - 0.5);
+        setTimeout(() => {
+            if (this.ingameMusicGain === gain) {
+                try {
+                    gain.gain.cancelScheduledValues(this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gain.gain.value, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + this.musicFadeTime);
+                } catch (e) {}
+            }
+        }, fadeOutStart * 1000);
+    },
+
+    stopIngameMusic() {
+        if (!this.ingameMusicSource) return;
+        const source = this.ingameMusicSource;
+        const gain = this.ingameMusicGain;
+
+        // Prevent onended from starting next track
+        source.onended = null;
+
+        try {
+            gain.gain.cancelScheduledValues(this.ctx.currentTime);
+            gain.gain.setValueAtTime(gain.gain.value, this.ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + this.musicFadeTime);
+            setTimeout(() => {
+                try { source.stop(); } catch (e) {}
+                try { gain.disconnect(); } catch (e) {}
+            }, this.musicFadeTime * 1000 + 200);
+        } catch (e) {
+            try { source.stop(); } catch (e2) {}
+        }
+
+        this.ingameMusicSource = null;
+        this.ingameMusicGain = null;
+    },
+
+    // Stop all music (menu + ingame)
+    stopAllMusic() {
+        this.stopMenuMusic();
+        this.stopIngameMusic();
+        this.stopTitleAmbient();
+    },
+
+    setMusicVolume(val) {
+        this.musicVolume = Math.max(0, Math.min(1, val));
+        if (this.menuMusicGain) {
+            this.menuMusicGain.gain.value = this.musicVolume * this.volume;
+        }
+        if (this.ingameMusicGain) {
+            this.ingameMusicGain.gain.value = this.musicVolume * this.volume;
+        }
+        this.saveSettings();
     },
 
     // Play a sound effect by name
@@ -459,6 +690,7 @@ const Sound = {
         this.enabled = !this.enabled;
         if (!this.enabled) {
             this.stopAmbient();
+            this.stopAllMusic();
         } else {
             if (this.ctx) this.startAmbient();
         }

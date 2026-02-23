@@ -58,9 +58,10 @@
         Sound.play('click');
         if (Game.load()) {
             Intro.phase = 'idle';
-            Sound.stopTitleAmbient();
+            Sound.stopAllMusic();
             showScreen('game-screen');
             Sound.startAmbient();
+            Sound.startIngameMusic();
         } else {
             alert('Kein gespeichertes Spiel gefunden.');
         }
@@ -76,7 +77,10 @@
     document.getElementById('btn-back-from-help').addEventListener('click', () => {
         showScreen('title-screen');
         Sound.play('click');
-        if (Intro.phase === 'idle') Intro.startTitle();
+        if (Intro.phase === 'idle') {
+            Intro.startTitle();
+            Sound.startMenuMusic();
+        }
     });
 
     // Setup screen
@@ -86,16 +90,20 @@
         const difficulty = document.getElementById('difficulty').value;
 
         Intro.phase = 'idle';
-        Sound.stopTitleAmbient();
+        Sound.stopAllMusic();
         showScreen('game-screen');
         Game.newGame(playerName, homeCity, difficulty);
         Sound.startAmbient('port');
+        Sound.startIngameMusic();
     });
 
     document.getElementById('btn-back-title').addEventListener('click', () => {
         showScreen('title-screen');
         Sound.play('click');
-        if (Intro.phase === 'idle') Intro.startTitle();
+        if (Intro.phase === 'idle') {
+            Intro.startTitle();
+            Sound.startMenuMusic();
+        }
     });
 
     // Modal close on overlay click

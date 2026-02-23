@@ -134,12 +134,12 @@ const Intro = {
         const credit = document.querySelector('.title-credit');
         if (credit) credit.style.opacity = '0';
 
-        // Ambient sound — atmospheric pad instead of SFX
+        // Music — start menu ambient track (with synth fallback)
         setTimeout(() => {
             if (typeof Sound !== 'undefined') {
                 Sound.init();
                 Sound.resume();
-                Sound.startTitleAmbient();
+                Sound.startMenuMusic();
             }
         }, 1200);
 
