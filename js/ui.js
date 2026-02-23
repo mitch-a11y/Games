@@ -62,12 +62,6 @@ const UI = {
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
         document.getElementById(`tab-${tabName}`).classList.add('active');
 
-        // Switch decorative banner art per tab
-        const banner = document.getElementById('panel-banner');
-        if (banner) {
-            banner.setAttribute('data-tab', tabName);
-        }
-
         this.refreshCurrentTab();
     },
 
