@@ -147,7 +147,7 @@ const AITrader = {
         );
 
         const distance = routeInfo ? routeInfo.distance : 5;
-        const speedPerTick = (ship.speed * CONFIG.SHIP_SPEED_BASE) / (distance * 30);
+        const speedPerTick = (ship.speed * CONFIG.SHIP_SPEED_BASE) / (distance * 5);
 
         ship.progress += speedPerTick;
 

@@ -300,7 +300,7 @@ const Game = {
             speed += windEffect;
             speed = Math.max(speed * 0.3, speed); // minimum 30% speed
 
-            const progressPerTick = speed / (distance * 30);
+            const progressPerTick = speed / (distance * 5);
             ship.progress += progressPerTick;
 
             if (ship.progress >= 1.0) {

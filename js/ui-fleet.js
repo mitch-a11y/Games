@@ -75,7 +75,7 @@ Object.assign(UI, {
         // Build destinations with shortest-path distances
         const destinations = allCities.map(destId => {
             const route = findShortestPath(ship.location, destId);
-            return { destId, distance: route ? route.distance : Infinity, travelDays: route ? Math.round(route.distance * 3) : '?' };
+            return { destId, distance: route ? route.distance : Infinity, travelDays: route ? route.distance : '?' };
         }).filter(d => d.distance < Infinity)
           .sort((a, b) => a.distance - b.distance);
 
@@ -251,7 +251,7 @@ Object.assign(UI, {
         html += `<select id="at-dest" style="width:100%;padding:6px;background:var(--panel-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:12px">`;
         connectedIds.forEach(cid => {
             const route = findShortestPath(ship.location, cid);
-            const days = route ? route.distance * 3 : '?';
+            const days = route ? route.distance : '?';
             html += `<option value="${cid}">${CITIES_DATA[cid].displayName} (~${days}d)</option>`;
         });
         html += `</select></div>`;
