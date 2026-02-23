@@ -1206,8 +1206,19 @@ const GameMap = {
         ctx.fillStyle = 'rgba(20, 35, 60, 0.75)';
         ctx.strokeStyle = 'rgba(180, 160, 100, 0.4)';
         ctx.lineWidth = 1;
+        const r = 5;
+        const rx = x, ry = y - h / 2;
         ctx.beginPath();
-        ctx.roundRect(x, y - h / 2, w, h, 5);
+        ctx.moveTo(rx + r, ry);
+        ctx.lineTo(rx + w - r, ry);
+        ctx.arcTo(rx + w, ry, rx + w, ry + r, r);
+        ctx.lineTo(rx + w, ry + h - r);
+        ctx.arcTo(rx + w, ry + h, rx + w - r, ry + h, r);
+        ctx.lineTo(rx + r, ry + h);
+        ctx.arcTo(rx, ry + h, rx, ry + h - r, r);
+        ctx.lineTo(rx, ry + r);
+        ctx.arcTo(rx, ry, rx + r, ry, r);
+        ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
