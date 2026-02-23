@@ -55,14 +55,6 @@ const UI = {
         return window.innerWidth <= 768;
     },
 
-    // Panel background images per tab
-    panelBackgrounds: {
-        city: 'assets/ui/panel_stadt.png',
-        trade: 'assets/ui/panel_handel.png',
-        fleet: 'assets/ui/panel_flotte.png',
-        build: 'assets/ui/panel_bauen.png'
-    },
-
     switchTab(tabName) {
         this.currentTab = tabName;
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -70,10 +62,10 @@ const UI = {
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
         document.getElementById(`tab-${tabName}`).classList.add('active');
 
-        // Switch panel background image per tab
-        const panel = document.getElementById('side-panel');
-        if (panel && this.panelBackgrounds[tabName]) {
-            panel.style.backgroundImage = `url('${this.panelBackgrounds[tabName]}')`;
+        // Switch decorative banner art per tab
+        const banner = document.getElementById('panel-banner');
+        if (banner) {
+            banner.setAttribute('data-tab', tabName);
         }
 
         this.refreshCurrentTab();

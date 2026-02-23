@@ -437,10 +437,7 @@ html, body {
     --bg-card-hover: var(--parchment-card-hover);
 
     width: 380px; flex-shrink: 0;
-    background-color: #d8c49a;
-    background-image: url('../assets/ui/panel_stadt.png');
-    background-size: cover;
-    background-position: top center;
+    background: linear-gradient(180deg, #d8c49a 0%, #cdb88a 50%, #c4ad7e 100%);
     border-left: 3px solid #8b6b3a;
     display: flex; flex-direction: column;
     overflow: hidden;
@@ -448,14 +445,29 @@ html, body {
     position: relative;
     color: #3b2a1a;
 }
-#side-panel::before {
+
+/* Decorative banner — shows cropped Leonardo AI panel art per tab */
+#panel-banner {
+    flex-shrink: 0;
+    height: 100px;
+    background-image: url('../assets/ui/panel_stadt.png');
+    background-size: 380px auto;
+    background-position: top center;
+    background-repeat: no-repeat;
+    border-bottom: 2px solid rgba(120, 85, 40, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+#panel-banner::after {
     content: '';
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(216, 196, 154, 0.92) 0%, rgba(216, 196, 154, 0.94) 30%, rgba(216, 196, 154, 0.96) 100%);
+    background: linear-gradient(180deg, transparent 40%, rgba(216, 196, 154, 0.95) 100%);
     pointer-events: none;
-    z-index: 0;
 }
-#side-panel > * { position: relative; z-index: 1; }
+#panel-banner[data-tab="city"]  { background-image: url('../assets/ui/panel_stadt.png'); }
+#panel-banner[data-tab="trade"] { background-image: url('../assets/ui/panel_handel.png'); }
+#panel-banner[data-tab="fleet"] { background-image: url('../assets/ui/panel_flotte.png'); }
+#panel-banner[data-tab="build"] { background-image: url('../assets/ui/panel_bauen.png'); }
 
 /* Side panel city banner */
 #side-panel-city-banner {
