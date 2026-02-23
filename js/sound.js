@@ -42,6 +42,9 @@ const Sound = {
     },
 
     async init() {
+        // Load saved settings from localStorage
+        this.loadSettings();
+
         try {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         } catch (e) {
@@ -52,6 +55,31 @@ const Sound = {
 
         // Start preloading sounds
         this.preloadAll();
+    },
+
+    // Persist sound settings to localStorage
+    saveSettings() {
+        try {
+            localStorage.setItem('hanse_sound', JSON.stringify({
+                enabled: this.enabled,
+                volume: this.volume,
+                sfxVolume: this.sfxVolume,
+                ambientVolume: this.ambientVolume
+            }));
+        } catch (e) { /* localStorage not available */ }
+    },
+
+    loadSettings() {
+        try {
+            const saved = localStorage.getItem('hanse_sound');
+            if (saved) {
+                const s = JSON.parse(saved);
+                if (typeof s.enabled === 'boolean') this.enabled = s.enabled;
+                if (typeof s.volume === 'number') this.volume = s.volume;
+                if (typeof s.sfxVolume === 'number') this.sfxVolume = s.sfxVolume;
+                if (typeof s.ambientVolume === 'number') this.ambientVolume = s.ambientVolume;
+            }
+        } catch (e) { /* localStorage not available */ }
     },
 
     resume() {
@@ -294,10 +322,12 @@ const Sound = {
         if (this.ambientGain) {
             this.ambientGain.gain.value = this.ambientVolume * this.volume;
         }
+        this.saveSettings();
     },
 
     setSfxVolume(val) {
         this.sfxVolume = Math.max(0, Math.min(1, val));
+        this.saveSettings();
     },
 
     setAmbientVolume(val) {
@@ -305,6 +335,7 @@ const Sound = {
         if (this.ambientGain) {
             this.ambientGain.gain.value = this.ambientVolume * this.volume;
         }
+        this.saveSettings();
     },
 
     toggle() {
@@ -314,6 +345,7 @@ const Sound = {
         } else {
             if (this.ctx) this.startAmbient();
         }
+        this.saveSettings();
         return this.enabled;
     }
 };

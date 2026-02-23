@@ -1025,17 +1025,45 @@ const UI = {
         const shipsOwned = Game.state.player.ships.length;
         const totalTraded = Game.state.player.totalTraded || 0;
 
+        const sfxPct = Math.round(Sound.sfxVolume * 100);
+        const ambPct = Math.round(Sound.ambientVolume * 100);
+        const masterPct = Math.round(Sound.volume * 100);
+
         const html = `<h3>Spielmenue</h3>
-            <div style="font-size:12px;margin-bottom:16px;padding:10px;background:rgba(15,52,96,0.3);border-radius:4px">
+            <div style="font-size:12px;margin-bottom:12px;padding:10px;background:rgba(15,52,96,0.3);border-radius:4px">
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Vermoegen:</span><span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Handelsvolumen:</span><span>${Utils.formatGold(totalTraded)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Tage gespielt:</span><span>${daysPlayed}</span></div>
                 <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}</span></div>
             </div>
+
+            <div style="margin-bottom:12px;padding:10px;background:rgba(15,52,96,0.3);border-radius:4px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:13px;font-weight:bold">Sound</span>
+                    <button id="menu-sound-toggle" class="modal-btn ${Sound.enabled ? 'primary' : 'danger'}" style="padding:4px 12px;font-size:11px;min-width:50px" onclick="Sound.toggle();UI.showGameMenu()">${Sound.enabled ? 'AN' : 'AUS'}</button>
+                </div>
+                <div style="opacity:${Sound.enabled ? 1 : 0.4};pointer-events:${Sound.enabled ? 'auto' : 'none'}">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
+                        <span style="min-width:65px">Gesamt</span>
+                        <input type="range" min="0" max="100" value="${masterPct}" style="flex:1;accent-color:var(--gold-color,#c8a84e)" oninput="Sound.setVolume(this.value/100);document.getElementById('vol-master-val').textContent=this.value+'%'">
+                        <span id="vol-master-val" style="min-width:35px;text-align:right;font-size:11px">${masterPct}%</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px">
+                        <span style="min-width:65px">Effekte</span>
+                        <input type="range" min="0" max="100" value="${sfxPct}" style="flex:1;accent-color:var(--gold-color,#c8a84e)" oninput="Sound.setSfxVolume(this.value/100);document.getElementById('vol-sfx-val').textContent=this.value+'%'">
+                        <span id="vol-sfx-val" style="min-width:35px;text-align:right;font-size:11px">${sfxPct}%</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+                        <span style="min-width:65px">Ambient</span>
+                        <input type="range" min="0" max="100" value="${ambPct}" style="flex:1;accent-color:var(--gold-color,#c8a84e)" oninput="Sound.setAmbientVolume(this.value/100);document.getElementById('vol-amb-val').textContent=this.value+'%'">
+                        <span id="vol-amb-val" style="min-width:35px;text-align:right;font-size:11px">${ambPct}%</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="modal-buttons" style="flex-direction:column;gap:8px">
                 <button class="modal-btn primary" onclick="Game.save();UI.showNotification('Gespeichert!','success');UI.hideModal()">Spiel speichern</button>
-                <button class="modal-btn secondary" onclick="UI.hideModal();UI.showStatsScreen()">📊 Statistiken</button>
-                <button class="modal-btn secondary" onclick="Sound.toggle();UI.hideModal();UI.showNotification(Sound.enabled?'Ton an':'Ton aus','info')">Ton ${Sound.enabled ? 'aus' : 'ein'}</button>
+                <button class="modal-btn secondary" onclick="UI.hideModal();UI.showStatsScreen()">Statistiken</button>
                 <button class="modal-btn danger" onclick="UI.hideModal();Game.returnToTitle()">Zum Hauptmenue</button>
                 <button class="modal-btn secondary" onclick="UI.hideModal()">Zurueck</button>
             </div>`;
