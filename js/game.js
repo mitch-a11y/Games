@@ -148,6 +148,11 @@ const Game = {
             while (this.tickAccumulator >= CONFIG.TICK_MS) {
                 this.tickAccumulator -= CONFIG.TICK_MS;
                 this.gameTick();
+                // If combat started mid-tick, drain accumulator and stop
+                if (typeof Combat !== 'undefined' && Combat.active) {
+                    this.tickAccumulator = 0;
+                    break;
+                }
             }
         }
 
@@ -221,6 +226,9 @@ const Game = {
                         this.state.eventCooldown = 10;
                     }
                 });
+
+                // If combat just started from events, stop processing this tick
+                if (typeof Combat !== 'undefined' && Combat.active) return;
             }
         }
 
@@ -267,6 +275,9 @@ const Game = {
     },
 
     updateShips() {
+        // Skip ship updates entirely during active combat
+        if (typeof Combat !== 'undefined' && Combat.active) return;
+
         this.state.player.ships.forEach(ship => {
             if (ship.status !== 'sailing' || !ship.route) return;
 
@@ -307,6 +318,9 @@ const Game = {
     },
 
     shipArrived(ship) {
+        // Safety: don't process arrivals during active combat
+        if (typeof Combat !== 'undefined' && Combat.active) return;
+
         const dest = ship.route[ship.route.length - 1];
         ship.status = 'docked';
         ship.location = dest;
@@ -321,18 +335,20 @@ const Game = {
         if (!this.state.player.voyagesCompleted) this.state.player.voyagesCompleted = 0;
         this.state.player.voyagesCompleted++;
 
-        // Process auto-trade if configured
+        // Process auto-trade if configured (guard against combat starting in between)
         if (ship.autoTrade) {
-            // Small delay so the market settles
+            const shipId = ship.id;
             setTimeout(() => {
-                if (ship.status === 'docked' && ship.autoTrade) {
-                    Trading.processAutoTrade(this.state, ship);
+                if (typeof Combat !== 'undefined' && Combat.active) return;
+                const s = this.state?.player?.ships.find(x => x.id === shipId);
+                if (s && s.status === 'docked' && s.autoTrade) {
+                    Trading.processAutoTrade(this.state, s);
                 }
             }, 100);
         }
 
-        // Auto-select city if no active combat
-        if (GameMap.selectedCity !== dest && !(typeof Combat !== 'undefined' && Combat.active)) {
+        // Auto-select city
+        if (GameMap.selectedCity !== dest) {
             GameMap.selectCity(dest);
         }
     },

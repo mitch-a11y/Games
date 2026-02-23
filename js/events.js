@@ -397,10 +397,13 @@ const Events = {
         const events = [];
         const currentSeason = typeof Game !== 'undefined' && Game.getSeason ? Game.getSeason() : 'summer';
 
-        // Check ship events
+        // Check ship events (stop after first combat to prevent multi-combat)
+        let combatTriggered = typeof Combat !== 'undefined' && Combat.active;
         gameState.player.ships.forEach(ship => {
+            if (combatTriggered) return; // No more ship events once combat started
             if (ship.status === 'sailing') {
                 EVENT_TEMPLATES.filter(e => e.requiresSailing).forEach(evt => {
+                    if (combatTriggered) return;
                     // Skip if season doesn't match
                     if (evt.seasonRequired && evt.seasonRequired !== currentSeason) return;
                     if (Math.random() < evt.chance * eventChanceMod * 0.3) {
@@ -411,6 +414,10 @@ const Events = {
                             message: msg,
                             params: { ship: ship.name, city: CITIES_DATA[nearCity]?.displayName || 'See' }
                         });
+                        // If this event started combat, stop all further ship events
+                        if (evt.type === 'combat' && evt.interactive && typeof Combat !== 'undefined' && Combat.active) {
+                            combatTriggered = true;
+                        }
                     }
                 });
             }

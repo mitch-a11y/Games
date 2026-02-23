@@ -7,9 +7,13 @@
 const Combat = {
     active: false,
     state: null,
+    /** ID of the ship currently in combat (prevents tick-level race conditions) */
+    combatShipId: null,
 
     // Start a combat encounter
     initCombat(playerShip, enemyType, nearCity) {
+        // Prevent double-combat: if already fighting, ignore
+        if (this.active) return;
         // Check for convoy — combine forces
         let convoyShips = [];
         if (playerShip.convoyId && Game.state && Game.state.player) {
@@ -38,6 +42,7 @@ const Combat = {
         };
 
         this.active = true;
+        this.combatShipId = playerShip.id;
         this._addLog(`${enemy.name} greift ${playerShip.name} nahe ${CITIES_DATA[nearCity]?.displayName || 'der Küste'} an!`, 'danger');
         this._showCombatUI();
     },
@@ -374,14 +379,14 @@ const Combat = {
 
     closeCombat() {
         this.active = false;
+        this.combatShipId = null;
         this.state = null;
         document.getElementById('modal-overlay').classList.add('hidden');
 
-        // Resume game speed
-        if (this._savedSpeed) {
-            Game.setSpeed(this._savedSpeed);
-            this._savedSpeed = null;
-        }
+        // Resume game speed (default to 1 if saved speed was lost)
+        const resumeSpeed = this._savedSpeed || 1;
+        this._savedSpeed = null;
+        Game.setSpeed(resumeSpeed);
 
         UI.updateTopBar(Game.state);
         UI.refreshCurrentTab();
