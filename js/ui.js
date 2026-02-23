@@ -151,6 +151,20 @@ const UI = {
             html += this.detailRow('Eure Schiffe', dockedShips.map(s => s.name).join(', '));
         }
 
+        // AI traders in this city
+        if (Game.state.aiTraders) {
+            const aiHere = Game.state.aiTraders.filter(ai =>
+                ai.ships.some(s => s.location === cityId && s.status === 'docked')
+            );
+            if (aiHere.length > 0) {
+                const aiNames = aiHere.map(ai => {
+                    const cargo = ai.ships.reduce((sum, s) => sum + getCargoCount(s), 0);
+                    return `${ai.name.split(' ')[0]} (${cargo} Fracht)`;
+                }).join(', ');
+                html += this.detailRow('Fremde Haendler', `<span style="font-size:11px">${aiNames}</span>`);
+            }
+        }
+
         // Net worth
         const netWorth = Game.calculateNetWorth();
         html += this.detailRow('Vermoegen', `<span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span>`);

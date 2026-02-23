@@ -611,12 +611,14 @@ const GameMap = {
             }
         });
 
-        // AI ships
+        // AI ships (sailing)
         if (gameState.aiTraders) {
-            gameState.aiTraders.forEach(ai => {
+            const aiColors = ['#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#d35400', '#16a085', '#f39c12', '#7f8c8d'];
+            gameState.aiTraders.forEach((ai, aiIdx) => {
+                const aiColor = aiColors[aiIdx % aiColors.length];
                 ai.ships.forEach(ship => {
                     if (ship.status !== 'sailing' || !ship.route || ship.route.length < 2) return;
-                    const pos = this.getShipScreenPos(ship, t + ai.ships.indexOf(ship) * 10);
+                    const pos = this.getShipScreenPos(ship, t + aiIdx * 10);
                     if (!pos) return;
 
                     const shipScale = this.getShipScale(ship.typeId, false);
@@ -629,7 +631,52 @@ const GameMap = {
                         });
                     }
 
-                    this.drawDetailedShip(ctx, pos.x, pos.y, pos.angle, ship, '#778899', '#ccc', false);
+                    this.drawDetailedShip(ctx, pos.x, pos.y, pos.angle, ship, aiColor, '#ddd', false);
+
+                    // AI ship name label
+                    const labelOffset = 8 + shipScale * 4;
+                    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                    ctx.shadowBlur = 3;
+                    ctx.font = '8px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = aiColor;
+                    ctx.fillText(ai.name.split(' ')[0], pos.x, pos.y - labelOffset);
+                    ctx.shadowBlur = 0;
+                });
+            });
+        }
+
+        // AI ships docked — small pennant markers at cities
+        if (gameState.aiTraders) {
+            const aiColors = ['#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#d35400', '#16a085', '#f39c12', '#7f8c8d'];
+            gameState.aiTraders.forEach((ai, aiIdx) => {
+                const aiColor = aiColors[aiIdx % aiColors.length];
+                ai.ships.forEach(ship => {
+                    if (ship.status !== 'docked' || !ship.location) return;
+                    const city = CITIES_DATA[ship.location];
+                    if (!city) return;
+                    const sp = this.worldToScreen(city.x, city.y);
+
+                    // Draw small colored diamond below city
+                    const offsetY = 12 + aiIdx * 6;
+                    const dx = sp.x + (aiIdx % 2 === 0 ? -10 : 10);
+                    const dy = sp.y + offsetY;
+
+                    ctx.save();
+                    ctx.translate(dx, dy);
+                    // Diamond shape
+                    ctx.beginPath();
+                    ctx.moveTo(0, -4);
+                    ctx.lineTo(4, 0);
+                    ctx.lineTo(0, 4);
+                    ctx.lineTo(-4, 0);
+                    ctx.closePath();
+                    ctx.fillStyle = aiColor;
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                    ctx.restore();
                 });
             });
         }
@@ -1024,6 +1071,15 @@ const GameMap = {
             if (city.hasShipyard) html += '<p>&#9875; Werft</p>';
             const docked = Game.state.player.ships.filter(s => s.location === this.hoveredCity);
             if (docked.length > 0) html += `<p>&#9973; ${docked.length} Schiff(e)</p>`;
+            // AI traders in this city
+            if (Game.state.aiTraders) {
+                const aiHere = Game.state.aiTraders.filter(ai =>
+                    ai.ships.some(s => s.location === this.hoveredCity && s.status === 'docked')
+                );
+                if (aiHere.length > 0) {
+                    html += '<p style="color:#c0a060">' + aiHere.map(a => a.name.split(' ')[0]).join(', ') + '</p>';
+                }
+            }
             tooltip.innerHTML = html;
         } else {
             tooltip.classList.add('hidden');
