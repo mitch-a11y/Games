@@ -222,6 +222,9 @@ const Trading = {
         // Reputation gain from trading
         if (typeof Diplomacy !== 'undefined') Diplomacy.onTrade(gameState, cityId, revenue);
 
+        // Track profit for quests (revenue = profit approximation)
+        if (typeof Quests !== 'undefined') Quests.onTrade(gameState, revenue);
+
         return {
             success: true,
             amount: actual,

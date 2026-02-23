@@ -955,6 +955,103 @@ html, body {
 .diplo-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
 .diplo-blocked { font-size: 10px; color: var(--danger); font-style: italic; }
 
+/* === QUEST BOARD === */
+.quest-board {
+    padding: 16px;
+    max-width: 450px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.quest-board-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.quest-board-header h3 { margin: 0; }
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--parchment-text);
+    padding: 0 4px;
+}
+.quest-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--parchment-dim);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(120, 85, 40, 0.3);
+}
+.quest-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--parchment-dim);
+    margin: 12px 0 6px;
+    letter-spacing: 0.5px;
+}
+.quest-card {
+    background: var(--parchment-card);
+    border: 1px solid rgba(120, 85, 40, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    margin-bottom: 8px;
+    transition: all var(--transition);
+}
+.quest-card:hover { background: var(--parchment-card-hover); }
+.quest-urgent { border-color: var(--danger); background: rgba(217, 64, 64, 0.08); }
+.quest-offer { border-left: 3px solid var(--accent); }
+.quest-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+.quest-title { font-weight: 600; font-size: 12px; color: var(--parchment-header); }
+.quest-timer { font-size: 11px; font-weight: 600; color: var(--warning); }
+.quest-reward { font-size: 11px; font-weight: 600; color: var(--gold-color); }
+.quest-desc { font-size: 11px; color: var(--parchment-dim); margin-bottom: 6px; line-height: 1.4; }
+.quest-meta { font-size: 10px; color: var(--parchment-dim); margin-bottom: 6px; }
+.quest-progress-bar {
+    height: 4px;
+    background: rgba(120, 85, 40, 0.2);
+    border-radius: 2px;
+    margin: 4px 0;
+    overflow: hidden;
+}
+.quest-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #ffd700);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+.quest-progress-text { font-size: 10px; color: var(--parchment-dim); }
+.quest-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    border: 1px solid rgba(120, 85, 40, 0.4);
+}
+.quest-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.quest-btn-accept {
+    background: linear-gradient(135deg, #1a6a2a, #28a840);
+    color: #f5eed8;
+    border-color: rgba(40, 140, 60, 0.5);
+}
+.quest-btn-abandon {
+    background: rgba(160, 60, 60, 0.3);
+    color: #d4a0a0;
+    border-color: rgba(160, 60, 60, 0.4);
+    font-size: 10px;
+    padding: 3px 8px;
+}
+
 /* === BANK TAB === */
 .bank-overview {
     background: rgba(90, 70, 30, 0.15);

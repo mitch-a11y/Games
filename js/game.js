@@ -241,6 +241,11 @@ const Game = {
             Sound.updateAmbient(this.state);
         }
 
+        // Quest daily update
+        if (typeof Quests !== 'undefined') {
+            Quests.dailyUpdate(this.state);
+        }
+
         // Update UI periodically
         this.state.player.daysPlayed++;
         if (this.state.player.daysPlayed % 2 === 0) {
