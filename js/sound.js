@@ -165,21 +165,39 @@ const Sound = {
     // ==========================================
     // MENU MUSIC (title screen)
     // ==========================================
+    _menuMusicRetryTimer: null,
+
     startMenuMusic() {
         if (!this.enabled || !this.ctx) return;
         this.resume();
 
-        // Already playing?
+        // Already playing the real music?
         if (this.menuMusicSource) return;
+
+        // Clear any previous retry timer
+        if (this._menuMusicRetryTimer) {
+            clearInterval(this._menuMusicRetryTimer);
+            this._menuMusicRetryTimer = null;
+        }
 
         const buffer = this.musicBuffers.menu;
         if (!buffer) {
-            // Fallback to synth ambient if music not loaded yet
+            // Start synth ambient as temporary placeholder
             this.startTitleAmbient();
+            // Poll every 500ms until the MP3 is loaded
+            this._menuMusicRetryTimer = setInterval(() => {
+                if (this.musicBuffers.menu) {
+                    clearInterval(this._menuMusicRetryTimer);
+                    this._menuMusicRetryTimer = null;
+                    // Now play the real music (recursive call with buffer available)
+                    this.menuMusicSource = null; // ensure clean state
+                    this.startMenuMusic();
+                }
+            }, 500);
             return;
         }
 
-        // Stop synth ambient if it was playing as fallback
+        // Stop synth ambient if it was playing as placeholder
         this.stopTitleAmbient();
 
         const source = this.ctx.createBufferSource();
@@ -203,6 +221,11 @@ const Sound = {
     },
 
     stopMenuMusic() {
+        // Clear retry timer if still waiting for music to load
+        if (this._menuMusicRetryTimer) {
+            clearInterval(this._menuMusicRetryTimer);
+            this._menuMusicRetryTimer = null;
+        }
         if (!this.menuMusicSource) return;
         const source = this.menuMusicSource;
         const gain = this.menuMusicGain;
