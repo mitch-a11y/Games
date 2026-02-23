@@ -209,6 +209,82 @@ const Trading = {
         return trades.sort((a, b) => b.profitPercent - a.profitPercent);
     },
 
+    // Find the best sell city for each good from a given city
+    // Returns { goodId: { cityId, cityName, sellPrice, profit, profitPercent, distance } }
+    findBestSellCities(gameState, fromCityId) {
+        const fromCity = gameState.cities[fromCityId];
+        if (!fromCity) return {};
+
+        const results = {};
+
+        GOOD_IDS.forEach(goodId => {
+            const buyPrice = fromCity.market[goodId].price;
+            let bestCity = null;
+            let bestProfit = 0;
+            let bestProfitPct = 0;
+            let bestSellPrice = 0;
+            let bestDistance = 0;
+
+            CITY_IDS.forEach(toCityId => {
+                if (toCityId === fromCityId) return;
+                const toCity = gameState.cities[toCityId];
+                if (!toCity) return;
+
+                const sellPrice = toCity.market[goodId].price;
+                const profit = sellPrice - buyPrice;
+                const profitPct = (profit / buyPrice) * 100;
+
+                if (profit > bestProfit) {
+                    const route = findShortestPath(fromCityId, toCityId);
+                    bestCity = toCityId;
+                    bestProfit = profit;
+                    bestProfitPct = profitPct;
+                    bestSellPrice = sellPrice;
+                    bestDistance = route ? route.distance : 99;
+                }
+            });
+
+            results[goodId] = {
+                cityId: bestCity,
+                cityName: bestCity ? CITIES_DATA[bestCity].displayName : null,
+                sellPrice: bestSellPrice,
+                profit: bestProfit,
+                profitPercent: bestProfitPct,
+                distance: bestDistance
+            };
+        });
+
+        return results;
+    },
+
+    // Get top N trade opportunities from a city (for trade advisor)
+    getTopTradeOpportunities(gameState, fromCityId, topN = 5) {
+        const bestSells = this.findBestSellCities(gameState, fromCityId);
+        const fromCity = gameState.cities[fromCityId];
+        if (!fromCity) return [];
+
+        const opportunities = GOOD_IDS.map(goodId => {
+            const best = bestSells[goodId];
+            const m = fromCity.market[goodId];
+            return {
+                goodId,
+                good: GOODS[goodId],
+                buyPrice: m.price,
+                stock: m.stock,
+                bestCity: best.cityId,
+                bestCityName: best.cityName,
+                sellPrice: best.sellPrice,
+                profit: best.profit,
+                profitPercent: best.profitPercent,
+                distance: best.distance,
+                // Profit per distance unit (efficiency)
+                profitPerDay: best.distance > 0 ? best.profit / best.distance : 0
+            };
+        }).filter(o => o.profit > 0 && o.stock >= 2);
+
+        return opportunities.sort((a, b) => b.profitPercent - a.profitPercent).slice(0, topN);
+    },
+
     // === AUTO-TRADE ===
 
     // Execute auto-trade logic when ship arrives at a destination

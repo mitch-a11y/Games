@@ -9,6 +9,12 @@ const UI = {
     selectedTradeShipIdx: 0,
     notifications: [],
     tradeQuantities: {}, // store qty per good for trade tab
+    tradeSort: 'profit',    // 'name', 'price', 'profit', 'stock'
+    tradeFilter: 'all',     // 'all', 'food', 'raw', 'manufactured', 'luxury'
+    tradeProfitOnly: false,  // only show profitable goods
+    tradeDestCity: null,     // selected comparison destination
+    _bestSellCache: null,    // cached profit data
+    _bestSellCacheCity: null, // which city the cache is for
 
     init() {
         // Tab switching
@@ -251,23 +257,26 @@ const UI = {
         const cargoCount = getCargoCount(ship);
         const cargoPercent = Math.round(cargoCount / ship.capacity * 100);
 
+        // Cache profit data (recalculate only when city changes)
+        if (this._bestSellCacheCity !== cityId) {
+            this._bestSellCache = Trading.findBestSellCities(Game.state, cityId);
+            this._bestSellCacheCity = cityId;
+        }
+        const bestSells = this._bestSellCache;
+
         let html = '';
 
         // Ship selector
         if (dockedShips.length > 1) {
-            html += '<div style="display:flex;gap:4px;margin-bottom:8px">';
+            html += '<div class="trade-ship-selector">';
             dockedShips.forEach((s, i) => {
                 const active = i === this.selectedTradeShipIdx;
-                html += `<button onclick="UI.selectedTradeShipIdx=${i};UI.updateTradeTab()"
-                    style="flex:1;padding:4px 6px;font-size:11px;border-radius:3px;cursor:pointer;
-                    background:${active ? 'var(--accent-dark)' : 'var(--bg-medium)'};
-                    color:${active ? '#fff' : 'var(--text-dim)'};
-                    border:1px solid ${active ? 'var(--accent)' : 'var(--border)'}">${s.name}</button>`;
+                html += `<button class="trade-ship-btn ${active ? 'active' : ''}" onclick="UI.selectedTradeShipIdx=${i};UI.updateTradeTab()">${s.name}</button>`;
             });
             html += '</div>';
         }
 
-        // Ship summary with cargo bar (at top for context)
+        // Ship summary
         html += `<div class="trade-summary">
             <div class="trade-summary-row"><span>\u2693 ${ship.name}</span><span style="color:var(--text-dim)">${SHIP_TYPES[ship.typeId].name}</span></div>
             <div class="trade-summary-row"><span>Fracht:</span><span>${cargoCount} / ${ship.capacity} (${cargoPercent}%)</span></div>
@@ -275,22 +284,123 @@ const UI = {
             <div class="trade-summary-row"><span>Verf\u00fcgbar:</span><span style="color:var(--gold-color);font-weight:bold">${Utils.formatGold(Game.state.player.gold)}</span></div>
         </div>`;
 
-        // Goods list
-        GOOD_IDS.forEach(goodId => {
+        // Trade Advisor — top opportunities
+        const topTrades = Trading.getTopTradeOpportunities(Game.state, cityId, 3);
+        if (topTrades.length > 0) {
+            html += '<div class="trade-advisor">';
+            html += '<div class="trade-advisor-title">\uD83D\uDCCA Handelsberater</div>';
+            topTrades.forEach(t => {
+                html += `<div class="trade-advisor-tip" onclick="UI.executeTrade('buy','${t.goodId}','${ship.id}','${cityId}',9999);Sound.play('buy')">
+                    <span class="advisor-good">${t.good.icon} ${t.good.name}</span>
+                    <span class="advisor-route">\u2192 ${t.bestCityName}</span>
+                    <span class="advisor-profit">+${Math.round(t.profitPercent)}%</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        // Filter & Sort controls
+        html += '<div class="trade-controls">';
+
+        // Category filter
+        html += '<div class="trade-filter-row">';
+        const categories = [
+            { id: 'all', label: 'Alle' },
+            { id: 'food', label: 'Nahrung' },
+            { id: 'raw', label: 'Rohstoffe' },
+            { id: 'manufactured', label: 'Handwerk' },
+            { id: 'luxury', label: 'Luxus' }
+        ];
+        categories.forEach(cat => {
+            html += `<button class="trade-filter-btn ${this.tradeFilter === cat.id ? 'active' : ''}"
+                onclick="UI.tradeFilter='${cat.id}';UI.updateTradeTab()">${cat.label}</button>`;
+        });
+        html += '</div>';
+
+        // Sort + profit filter
+        html += '<div class="trade-sort-row">';
+        html += `<select class="trade-sort-select" onchange="UI.tradeSort=this.value;UI.updateTradeTab()">
+            <option value="profit" ${this.tradeSort === 'profit' ? 'selected' : ''}>Sortieren: Profit</option>
+            <option value="name" ${this.tradeSort === 'name' ? 'selected' : ''}>Sortieren: Name</option>
+            <option value="price" ${this.tradeSort === 'price' ? 'selected' : ''}>Sortieren: Preis</option>
+            <option value="stock" ${this.tradeSort === 'stock' ? 'selected' : ''}>Sortieren: Vorrat</option>
+        </select>`;
+        html += `<label class="trade-profit-toggle">
+            <input type="checkbox" ${this.tradeProfitOnly ? 'checked' : ''} onchange="UI.tradeProfitOnly=this.checked;UI.updateTradeTab()">
+            <span>Nur profitable</span>
+        </label>`;
+        html += '</div></div>';
+
+        // Build goods list with sorting/filtering
+        let goodsList = GOOD_IDS.map(goodId => {
             const m = cityState.market[goodId];
             const good = GOODS[goodId];
-            const inCargo = ship.cargo[goodId] || 0;
+            const best = bestSells[goodId];
+            return {
+                goodId, good, m,
+                inCargo: ship.cargo[goodId] || 0,
+                profit: best.profit,
+                profitPercent: best.profitPercent,
+                bestCity: best.cityName,
+                bestCityId: best.cityId,
+                bestSellPrice: best.sellPrice,
+                bestDistance: best.distance
+            };
+        });
+
+        // Apply filters
+        if (this.tradeFilter !== 'all') {
+            goodsList = goodsList.filter(g => g.good.category === this.tradeFilter);
+        }
+        if (this.tradeProfitOnly) {
+            goodsList = goodsList.filter(g => g.profit > 0);
+        }
+
+        // Apply sorting
+        switch (this.tradeSort) {
+            case 'profit':
+                goodsList.sort((a, b) => b.profitPercent - a.profitPercent);
+                break;
+            case 'name':
+                goodsList.sort((a, b) => a.good.name.localeCompare(b.good.name));
+                break;
+            case 'price':
+                goodsList.sort((a, b) => a.m.price - b.m.price);
+                break;
+            case 'stock':
+                goodsList.sort((a, b) => b.m.stock - a.m.stock);
+                break;
+        }
+
+        // Render goods
+        if (goodsList.length === 0) {
+            html += '<p style="color:var(--text-dim);text-align:center;padding:12px">Keine Waren gefunden.</p>';
+        }
+
+        goodsList.forEach(g => {
+            const { goodId, good, m, inCargo, profit, profitPercent, bestCity, bestDistance } = g;
             const maxBuy = Math.min(
                 Math.floor(Game.state.player.gold / m.price),
                 Math.floor(m.stock),
                 getRemainingCapacity(ship)
             );
             const trendIcon = m.trend > 0 ? '<span style="color:var(--danger)">\u25B2</span>' : (m.trend < 0 ? '<span style="color:var(--success)">\u25BC</span>' : '<span style="color:var(--text-dim)">\u2500</span>');
-
-            // Price color: green if below base (good buy), red if above (good sell)
             const priceColor = m.price < good.basePrice * 0.85 ? 'var(--success)' : (m.price > good.basePrice * 1.15 ? 'var(--danger)' : 'var(--text-light)');
 
-            html += `<div class="trade-row">
+            // Profit badge
+            let profitBadge = '';
+            if (profit > 0 && bestCity) {
+                const pctRound = Math.round(profitPercent);
+                const badgeColor = pctRound >= 30 ? 'var(--success)' : (pctRound >= 15 ? '#6a9a20' : 'var(--text-dim)');
+                profitBadge = `<div class="trade-profit-badge" title="Kaufen hier ${m.price}G, verkaufen in ${bestCity} ${g.bestSellPrice}G (~${bestDistance} Tage)">
+                    <span style="color:${badgeColor};font-weight:700">+${pctRound}%</span>
+                    <span class="profit-dest">\u2192 ${bestCity}</span>
+                </div>`;
+            } else {
+                profitBadge = `<div class="trade-profit-badge"><span style="color:var(--text-dim)">Kein Profit</span></div>`;
+            }
+
+            html += `<div class="trade-row ${profit >= 20 ? 'trade-row-hot' : ''}">
                 <div class="trade-good-info" style="min-width:0">
                     <div class="trade-good-name">${good.icon} ${good.name} ${trendIcon}</div>
                     <div class="trade-good-detail">
@@ -298,6 +408,7 @@ const UI = {
                         <span style="color:var(--text-dim)">| Vorrat: ${Math.floor(m.stock)}</span>
                         ${inCargo > 0 ? `<span style="color:var(--accent)">| Fracht: ${inCargo}</span>` : ''}
                     </div>
+                    ${profitBadge}
                 </div>
                 <div class="trade-actions">
                     <button class="trade-btn buy" onclick="UI.executeTrade('buy','${goodId}','${ship.id}','${cityId}',1)"
@@ -327,6 +438,12 @@ const UI = {
         </div>`;
 
         panel.innerHTML = html;
+    },
+
+    // Invalidate trade profit cache (called when market changes or city changes)
+    invalidateTradeCache() {
+        this._bestSellCache = null;
+        this._bestSellCacheCity = null;
     },
 
     executeTrade(action, goodId, shipId, cityId, amount) {

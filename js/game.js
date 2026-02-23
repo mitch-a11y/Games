@@ -177,6 +177,8 @@ const Game = {
             CITY_IDS.forEach(cityId => {
                 Trading.updateMarket(this.state.cities[cityId], diffMod, season);
             });
+            // Invalidate trade profit cache after market update
+            UI.invalidateTradeCache();
         }
 
         // Seasonal announcement (first day of new season)

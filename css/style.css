@@ -621,6 +621,108 @@ html, body {
     cursor: pointer; transition: all var(--transition);
 }
 .trade-btn-max:hover { color: #8b6914; border-color: rgba(139, 105, 20, 0.4); }
+.trade-btn-max:disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Trade Ship Selector */
+.trade-ship-selector { display: flex; gap: 4px; margin-bottom: 8px; }
+.trade-ship-btn {
+    flex: 1; padding: 4px 6px; font-size: 11px;
+    border-radius: 3px; cursor: pointer;
+    background: var(--parchment-card);
+    color: var(--text-dim);
+    border: 1px solid var(--parchment-border);
+    transition: all var(--transition);
+    font-family: var(--font-main);
+}
+.trade-ship-btn.active {
+    background: rgba(139, 105, 20, 0.25);
+    color: var(--parchment-header);
+    border-color: rgba(139, 105, 20, 0.5);
+    font-weight: 700;
+}
+.trade-ship-btn:hover:not(.active) { background: var(--parchment-card-hover); }
+
+/* Trade Advisor */
+.trade-advisor {
+    margin-bottom: 12px; padding: 8px 10px;
+    background: linear-gradient(135deg, rgba(42, 122, 72, 0.1), rgba(139, 105, 20, 0.1));
+    border: 1px solid rgba(42, 122, 72, 0.3);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--success);
+}
+.trade-advisor-title {
+    font-size: 11px; font-weight: 700;
+    color: var(--parchment-header);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 6px;
+    font-family: var(--font-title);
+}
+.trade-advisor-tip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 6px; margin-bottom: 2px;
+    border-radius: var(--radius-sm);
+    font-size: 11px; cursor: pointer;
+    transition: background var(--transition);
+}
+.trade-advisor-tip:hover { background: rgba(42, 122, 72, 0.12); }
+.advisor-good { font-weight: 700; color: var(--parchment-text); min-width: 80px; }
+.advisor-route { color: var(--text-dim); flex: 1; }
+.advisor-profit { font-weight: 700; color: var(--success); min-width: 40px; text-align: right; }
+
+/* Trade Controls (Filter + Sort) */
+.trade-controls { margin-bottom: 10px; }
+.trade-filter-row {
+    display: flex; gap: 3px; margin-bottom: 6px; flex-wrap: wrap;
+}
+.trade-filter-btn {
+    padding: 3px 8px; font-size: 10px; font-weight: 600;
+    background: var(--parchment-card);
+    color: var(--text-dim);
+    border: 1px solid var(--parchment-border);
+    border-radius: 10px; cursor: pointer;
+    transition: all var(--transition);
+    font-family: var(--font-main);
+}
+.trade-filter-btn.active {
+    background: rgba(139, 105, 20, 0.2);
+    color: #8b6914;
+    border-color: rgba(139, 105, 20, 0.5);
+}
+.trade-filter-btn:hover:not(.active) { background: var(--parchment-card-hover); }
+.trade-sort-row {
+    display: flex; gap: 8px; align-items: center;
+}
+.trade-sort-select {
+    flex: 1; padding: 3px 6px; font-size: 11px;
+    background: rgba(255, 250, 235, 0.5);
+    color: var(--parchment-text);
+    border: 1px solid var(--parchment-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-main);
+    cursor: pointer;
+}
+.trade-sort-select:focus { outline: none; border-color: #8b6914; }
+.trade-profit-toggle {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--text-dim);
+    cursor: pointer; white-space: nowrap;
+}
+.trade-profit-toggle input { cursor: pointer; accent-color: #8b6914; }
+
+/* Trade Profit Badge (inside each trade row) */
+.trade-profit-badge {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 3px; font-size: 10px;
+}
+.profit-dest {
+    color: var(--text-dim); font-size: 9px;
+}
+
+/* Hot trade row (high profit) */
+.trade-row-hot {
+    border-left: 3px solid var(--success);
+    background: rgba(42, 122, 72, 0.08);
+}
 
 .trade-summary {
     margin-bottom: 14px; padding: 10px 12px;
