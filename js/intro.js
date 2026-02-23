@@ -134,12 +134,12 @@ const Intro = {
         const credit = document.querySelector('.title-credit');
         if (credit) credit.style.opacity = '0';
 
-        // Sound
+        // Ambient sound — atmospheric pad instead of SFX
         setTimeout(() => {
             if (typeof Sound !== 'undefined') {
                 Sound.init();
                 Sound.resume();
-                Sound.play('newgame');
+                Sound.startTitleAmbient();
             }
         }, 1200);
 

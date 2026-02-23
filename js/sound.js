@@ -16,7 +16,8 @@ const Sound = {
     ambientGain: null,
     portAmbientSource: null,
     portAmbientGain: null,
-    currentAmbient: null,  // 'ocean' or 'port'
+    currentAmbient: null,  // 'ocean', 'port', or 'title'
+    titleAmbientNodes: null,  // synth ambient for title screen
 
     // All sound files to preload
     SOUNDS: {
@@ -191,11 +192,127 @@ const Sound = {
                 setTimeout(() => playTone(185, 0.3, 'sawtooth', 0.15), 200);
                 break;
             case 'newgame':
-                [523, 587, 659, 784].forEach((f, i) => {
-                    setTimeout(() => playTone(f, 0.25, 'triangle', 0.15), i * 200);
-                });
+                // Replaced: no more "dat dat dat" — title uses ambient instead
                 break;
         }
+    },
+
+    // ==========================================
+    // TITLE SCREEN AMBIENT (generative synth pad)
+    // ==========================================
+    startTitleAmbient() {
+        if (!this.enabled || !this.ctx) return;
+        this.resume();
+        if (this.titleAmbientNodes) return; // already playing
+
+        const ctx = this.ctx;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = 0;
+        masterGain.gain.linearRampToValueAtTime(
+            this.ambientVolume * this.volume * 0.6,
+            ctx.currentTime + 3 // 3 second fade in
+        );
+        masterGain.connect(ctx.destination);
+
+        const nodes = { master: masterGain, sources: [] };
+
+        // Deep drone pad (D2 + A2 — medieval open fifth)
+        const droneFreqs = [73.42, 110.0]; // D2, A2
+        droneFreqs.forEach(freq => {
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+
+            const gain = ctx.createGain();
+            gain.gain.value = 0.12;
+
+            // Gentle LFO for movement
+            const lfo = ctx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.08 + Math.random() * 0.05;
+            const lfoGain = ctx.createGain();
+            lfoGain.gain.value = 2;
+            lfo.connect(lfoGain);
+            lfoGain.connect(osc.frequency);
+            lfo.start();
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start();
+            nodes.sources.push(osc, lfo);
+        });
+
+        // Ethereal high harmonics (very quiet, shimmery)
+        [293.66, 440.0, 587.33].forEach((freq, i) => { // D4, A4, D5
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+
+            const gain = ctx.createGain();
+            gain.gain.value = 0.02 - i * 0.005; // decreasing volume
+
+            // Slow amplitude modulation
+            const ampLfo = ctx.createOscillator();
+            ampLfo.type = 'sine';
+            ampLfo.frequency.value = 0.03 + i * 0.02;
+            const ampLfoGain = ctx.createGain();
+            ampLfoGain.gain.value = 0.015;
+            ampLfo.connect(ampLfoGain);
+            ampLfoGain.connect(gain.gain);
+            ampLfo.start();
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start();
+            nodes.sources.push(osc, ampLfo);
+        });
+
+        // Filtered brown noise — like wind/waves
+        const bufferSize = ctx.sampleRate * 4;
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        let lastOut = 0;
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            data[i] = (lastOut + 0.02 * white) / 1.02;
+            lastOut = data[i];
+            data[i] *= 3.5;
+        }
+        const noiseSource = ctx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+        noiseSource.loop = true;
+
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.value = 150;
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.value = 0.06;
+
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+        noiseSource.start();
+        nodes.sources.push(noiseSource);
+
+        this.titleAmbientNodes = nodes;
+    },
+
+    stopTitleAmbient() {
+        if (!this.titleAmbientNodes) return;
+        const { master, sources } = this.titleAmbientNodes;
+
+        // Fade out over 1.5 seconds
+        try {
+            master.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.5);
+            setTimeout(() => {
+                sources.forEach(s => { try { s.stop(); } catch (e) {} });
+                try { master.disconnect(); } catch (e) {}
+            }, 1700);
+        } catch (e) {
+            sources.forEach(s => { try { s.stop(); } catch (e2) {} });
+        }
+        this.titleAmbientNodes = null;
     },
 
     // Ambient sound management

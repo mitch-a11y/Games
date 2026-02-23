@@ -58,6 +58,7 @@
         Sound.play('click');
         if (Game.load()) {
             Intro.phase = 'idle';
+            Sound.stopTitleAmbient();
             showScreen('game-screen');
             Sound.startAmbient();
         } else {
@@ -85,6 +86,7 @@
         const difficulty = document.getElementById('difficulty').value;
 
         Intro.phase = 'idle';
+        Sound.stopTitleAmbient();
         showScreen('game-screen');
         Game.newGame(playerName, homeCity, difficulty);
         Sound.startAmbient('port');
