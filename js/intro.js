@@ -533,10 +533,25 @@ const Intro = {
         const titleContent = document.getElementById('title-content');
         const menu = document.querySelector('.title-menu');
         const credit = document.querySelector('.title-credit');
+        const hasLeonardo = !!this.bgImages.menuPanel;
 
-        if (titleContent) titleContent.style.opacity = String(this.titleAlpha);
-        if (menu) menu.style.opacity = String(this.menuAlpha);
-        if (credit) credit.style.opacity = String(this.menuAlpha * 0.6);
+        if (hasLeonardo) {
+            // Leonardo image has built-in title + buttons
+            // Hide the HTML title/subtitle/ornament, keep buttons as invisible click zones
+            if (titleContent) {
+                titleContent.style.opacity = String(this.menuAlpha);
+                titleContent.classList.add('leonardo-mode');
+            }
+            if (menu) menu.style.opacity = String(this.menuAlpha);
+            if (credit) credit.style.opacity = String(this.menuAlpha * 0.4);
+        } else {
+            if (titleContent) {
+                titleContent.style.opacity = String(this.titleAlpha);
+                titleContent.classList.remove('leonardo-mode');
+            }
+            if (menu) menu.style.opacity = String(this.menuAlpha);
+            if (credit) credit.style.opacity = String(this.menuAlpha * 0.6);
+        }
 
         if (this.panelAlpha <= 0) return;
 

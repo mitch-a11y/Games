@@ -110,6 +110,15 @@ html, body {
     transition: opacity 0.5s ease;
 }
 
+/* Leonardo mode: position buttons over the painted buttons in the image */
+.title-overlay .title-content.leonardo-mode {
+    position: absolute;
+    left: 4.5%;
+    top: 46%;
+    padding-left: 0;
+    max-width: none;
+}
+
 /* Setup screen with canvas bg */
 #setup-screen { position: relative; }
 #setup-bg-canvas {
@@ -268,6 +277,55 @@ html, body {
     color: rgba(140, 120, 80, 0.2);
     z-index: 3;
     font-style: italic;
+}
+
+/* === LEONARDO MODE — hide HTML text, use image artwork === */
+.title-content.leonardo-mode .game-title,
+.title-content.leonardo-mode .game-subtitle,
+.title-content.leonardo-mode .title-ornament {
+    display: none !important;
+}
+
+.title-content.leonardo-mode .title-menu {
+    margin-top: 0;
+}
+
+.title-content.leonardo-mode .title-btn {
+    background: transparent;
+    border: none;
+    border-left: none;
+    color: transparent;
+    text-shadow: none;
+    box-shadow: none;
+    width: 200px;
+    padding: 16px 24px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.title-content.leonardo-mode .title-btn .btn-icon {
+    display: none;
+}
+
+.title-content.leonardo-mode .title-btn::before {
+    display: none;
+}
+
+.title-content.leonardo-mode .title-btn:hover {
+    background: rgba(200, 160, 60, 0.12);
+    border-radius: 6px;
+    color: transparent;
+    transform: none;
+    box-shadow: 0 0 20px rgba(200, 160, 60, 0.15);
+}
+
+.title-content.leonardo-mode .title-btn:active {
+    background: rgba(200, 160, 60, 0.2);
+    transform: none;
+}
+
+.title-content.leonardo-mode .title-credit {
+    color: rgba(160, 140, 100, 0.2);
 }
 
 /* === SETUP SCREEN — warm parchment/map style === */
