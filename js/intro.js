@@ -544,6 +544,44 @@ const Intro = {
             }
             if (menu) menu.style.opacity = String(this.menuAlpha);
             if (credit) credit.style.opacity = String(this.menuAlpha * 0.4);
+
+            // Dynamically position buttons over the painted buttons in the image
+            // The image is drawn with cover-fit logic — compute actual draw position
+            const img = this.bgImages.menuPanel;
+            const imgRatio = img.width / img.height;
+            const screenRatio = w / h;
+            let drawW, drawH, drawX, drawY;
+            if (screenRatio > imgRatio) {
+                drawW = w; drawH = w / imgRatio; drawX = 0; drawY = (h - drawH) / 2;
+            } else {
+                drawH = h; drawW = h * imgRatio; drawX = 0; drawY = 0;
+            }
+
+            // Button positions relative to the original image (measured from Leonardo image)
+            // First button "Neues Spiel" starts at ~57% height, each ~10.5% apart
+            // X position: ~5% from left edge, width ~14% of image
+            const btnX = drawX + drawW * 0.048;
+            const btnW = drawW * 0.145;
+            const btnStartY = drawY + drawH * 0.565;
+            const btnSpacing = drawH * 0.105;
+            const btnH = drawH * 0.085;
+
+            if (titleContent) {
+                titleContent.style.position = 'absolute';
+                titleContent.style.left = btnX + 'px';
+                titleContent.style.top = btnStartY + 'px';
+                titleContent.style.paddingLeft = '0';
+                titleContent.style.maxWidth = 'none';
+            }
+
+            // Size each button to match the painted area
+            const buttons = menu ? menu.querySelectorAll('.title-btn') : [];
+            buttons.forEach((btn, i) => {
+                btn.style.width = btnW + 'px';
+                btn.style.height = btnH + 'px';
+                btn.style.padding = '0';
+                btn.style.marginBottom = (btnSpacing - btnH) + 'px';
+            });
         } else {
             if (titleContent) {
                 titleContent.style.opacity = String(this.titleAlpha);
