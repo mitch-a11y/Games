@@ -22,13 +22,13 @@
     // Skip intro on click/key
     document.getElementById('title-screen').addEventListener('click', (e) => {
         // Don't skip if clicking menu buttons
-        if (e.target.classList.contains('title-btn')) return;
-        if (Intro.phase === 'blueprint' || Intro.phase === 'story' || Intro.phase === 'ocean') {
+        if (e.target.classList.contains('title-btn') || e.target.classList.contains('btn-icon')) return;
+        if (Intro.phase === 'mapreveal' || Intro.phase === 'story') {
             Intro.skipIntro();
         }
     });
     document.addEventListener('keydown', (e) => {
-        if ((Intro.phase === 'blueprint' || Intro.phase === 'story' || Intro.phase === 'ocean') && e.key !== 'F5' && e.key !== 'F12') {
+        if ((Intro.phase === 'mapreveal' || Intro.phase === 'story') && e.key !== 'F5' && e.key !== 'F12') {
             Intro.skipIntro();
         }
     });
@@ -46,8 +46,8 @@
             setupCanvas.height = introCanvas.height;
             const sCtx = setupCanvas.getContext('2d');
             sCtx.drawImage(introCanvas, 0, 0);
-            // Darken it
-            sCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            // Warm darken overlay (match parchment theme)
+            sCtx.fillStyle = 'rgba(14, 10, 6, 0.55)';
             sCtx.fillRect(0, 0, setupCanvas.width, setupCanvas.height);
         }
     });
