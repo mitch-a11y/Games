@@ -67,21 +67,40 @@ Object.assign(UI, {
     },
 
     renderNavigationOptions(ship) {
-        const connected = getConnectedCities(ship.location);
+        // Show ALL reachable ports, not just directly connected ones
+        const allCities = CITY_IDS.filter(cid => cid !== ship.location);
         let html = '<div style="padding:8px;background:rgba(15,52,96,0.4);border-radius:4px;margin-bottom:8px">';
-        html += '<div style="font-size:12px;color:var(--accent);margin-bottom:6px;font-weight:bold">Ziel waehlen:</div>';
+        html += '<div style="font-size:12px;color:var(--accent);margin-bottom:6px;font-weight:bold">Ziel wählen:</div>';
 
-        // Sort by distance
-        const destinations = connected.map(destId => {
+        // Build destinations with shortest-path distances
+        const destinations = allCities.map(destId => {
             const route = findShortestPath(ship.location, destId);
-            return { destId, distance: route ? route.distance : 99, travelDays: route ? route.distance * 3 : '?' };
-        }).sort((a, b) => a.distance - b.distance);
+            return { destId, distance: route ? route.distance : Infinity, travelDays: route ? Math.round(route.distance * 3) : '?' };
+        }).filter(d => d.distance < Infinity)
+          .sort((a, b) => a.distance - b.distance);
 
-        destinations.forEach(dest => {
-            const city = CITIES_DATA[dest.destId];
-            html += `<button class="trade-btn buy" style="margin:2px;padding:4px 8px;font-size:11px;width:calc(50% - 4px)"
-                onclick="UI.sailShip('${ship.id}','${dest.destId}')">${city.displayName} <span style="color:var(--text-dim)">(~${dest.travelDays}d)</span></button>`;
-        });
+        // Group: nearby (direct connections) vs. distant
+        const directNeighbors = new Set(getConnectedCities(ship.location));
+        const nearby = destinations.filter(d => directNeighbors.has(d.destId));
+        const distant = destinations.filter(d => !directNeighbors.has(d.destId));
+
+        if (nearby.length > 0) {
+            html += '<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Nahe Häfen</div>';
+            nearby.forEach(dest => {
+                const city = CITIES_DATA[dest.destId];
+                html += `<button class="trade-btn buy" style="margin:2px;padding:4px 8px;font-size:11px;width:calc(50% - 4px)"
+                    onclick="UI.sailShip('${ship.id}','${dest.destId}')">${city.displayName} <span style="color:var(--text-dim)">(~${dest.travelDays}d)</span></button>`;
+            });
+        }
+
+        if (distant.length > 0) {
+            html += '<div style="font-size:10px;color:var(--text-dim);margin:6px 0 4px;text-transform:uppercase;letter-spacing:0.5px">Fernziele</div>';
+            distant.forEach(dest => {
+                const city = CITIES_DATA[dest.destId];
+                html += `<button class="trade-btn buy" style="margin:2px;padding:4px 8px;font-size:11px;width:calc(50% - 4px)"
+                    onclick="UI.sailShip('${ship.id}','${dest.destId}')">${city.displayName} <span style="color:var(--text-dim)">(~${dest.travelDays}d)</span></button>`;
+            });
+        }
 
         // Repair option
         if (ship.hull < ship.maxHull) {
