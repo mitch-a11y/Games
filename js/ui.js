@@ -1019,6 +1019,29 @@ const UI = {
     },
 
     // === BUILD TAB ===
+    _buildProductionChainHTML(bType, level, market) {
+        if (!bType.consumes && !bType.produces) return '';
+        let html = '<div class="production-chain">';
+        if (bType.consumes) {
+            // Input → Output chain
+            const inputs = Object.entries(bType.consumes).map(([goodId, amount]) => {
+                const good = GOODS[goodId];
+                const needed = amount * level;
+                const available = market && market[goodId] ? market[goodId].stock : 0;
+                const enough = available >= needed;
+                return `<span class="chain-resource ${enough ? 'chain-ok' : 'chain-missing'}">${good.icon} ${needed} ${good.name} <span class="chain-stock">(${available} vorhanden)</span></span>`;
+            });
+            const output = GOODS[bType.produces];
+            html += `<div class="chain-flow">${inputs.join(' + ')} <span class="chain-arrow">\u2192</span> <span class="chain-resource chain-output">${output.icon} ${level} ${output.name}</span></div>`;
+        } else if (bType.produces) {
+            // Simple production (no inputs)
+            const output = GOODS[bType.produces];
+            html += `<div class="chain-flow"><span class="chain-resource chain-output">${output.icon} ${level} ${output.name}/Zyklus</span></div>`;
+        }
+        html += '</div>';
+        return html;
+    },
+
     updateBuildTab() {
         const panel = document.getElementById('build-list');
         const cityId = GameMap.selectedCity;
@@ -1029,6 +1052,7 @@ const UI = {
         }
 
         const cityState = Game.state.cities[cityId];
+        const market = cityState.market || {};
         const available = Buildings.getAvailable(Game.state, cityId);
 
         let html = `<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">${CITIES_DATA[cityId].displayName}</p>`;
@@ -1038,12 +1062,28 @@ const UI = {
             html += '<h4 style="color:var(--text-dim);font-size:11px;text-transform:uppercase;margin-bottom:6px">Eure Gebaeude</h4>';
             cityState.playerBuildings.forEach(b => {
                 const type = BUILDING_TYPES[b.type];
+                // Production status indicator
+                let statusHTML = '';
+                if (type.produces) {
+                    if (type.consumes) {
+                        const producing = b._lastProduced === true;
+                        statusHTML = producing
+                            ? '<span class="prod-status prod-active">\u25CF Produziert</span>'
+                            : '<span class="prod-status prod-idle">\u25CF Rohstoffe fehlen</span>';
+                    } else {
+                        statusHTML = '<span class="prod-status prod-active">\u25CF Produziert</span>';
+                    }
+                }
+                const chainHTML = this._buildProductionChainHTML(type, b.level, market);
                 html += `<div class="build-item" style="border-color:var(--success)">
                     <div class="build-item-header">
                         <span class="build-item-name">${type.icon} ${type.name}</span>
-                        <span style="color:var(--text-dim);font-size:11px">Stufe ${b.level}</span>
+                        <span style="display:flex;align-items:center;gap:6px">
+                            ${statusHTML}
+                            <span style="color:var(--text-dim);font-size:11px">Stufe ${b.level}</span>
+                        </span>
                     </div>
-                    <div class="build-item-desc">${type.effect}</div>
+                    ${chainHTML}
                     <div style="font-size:10px;color:var(--text-dim)">Unterhalt: ${type.maintenance * b.level} G/Monat</div>
                 </div>`;
             });
@@ -1061,12 +1101,14 @@ const UI = {
 
         available.forEach(item => {
             const canAfford = Game.state.player.gold >= item.cost;
+            const chainHTML = this._buildProductionChainHTML(item.type, 1, market);
             html += `<div class="build-item">
                 <div class="build-item-header">
                     <span class="build-item-name">${item.type.icon} ${item.isUpgrade ? 'Ausbau: ' : ''}${item.type.name}</span>
                     <span class="build-item-cost">${Utils.formatGold(item.cost)}</span>
                 </div>
-                <div class="build-item-desc">${item.type.description}<br><em style="color:var(--text-dim)">${item.type.effect}</em></div>
+                <div class="build-item-desc">${item.type.description}</div>
+                ${chainHTML}
                 <button class="build-buy-btn" onclick="UI.buildBuilding('${cityId}','${item.typeId}')"
                     ${canAfford ? '' : 'disabled'}>${item.isUpgrade ? 'Ausbauen' : (canAfford ? 'Bauen' : 'Zu teuer')}</button>
             </div>`;

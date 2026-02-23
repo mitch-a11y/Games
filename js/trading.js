@@ -73,11 +73,46 @@ const Trading = {
                 m.stock += m.production * CONFIG.PRODUCTION_RATE;
             }
 
-            // Player building production
+            // Player building production (with production chains)
             if (cityState.playerBuildings) {
                 cityState.playerBuildings.forEach(b => {
-                    if (b.produces === goodId) {
-                        m.stock += CONFIG.PRODUCTION_RATE * b.level;
+                    if (b.produces !== goodId) return;
+
+                    const bType = BUILDING_TYPES[b.type];
+                    const outputAmount = CONFIG.PRODUCTION_RATE * b.level;
+
+                    // Check if building has input requirements (production chain)
+                    if (bType && bType.consumes) {
+                        let canProduce = true;
+                        const consumeAmounts = {};
+
+                        for (const inputGood in bType.consumes) {
+                            const needed = bType.consumes[inputGood] * b.level;
+                            const inputMarket = market[inputGood];
+                            if (!inputMarket || inputMarket.stock < needed) {
+                                canProduce = false;
+                                break;
+                            }
+                            consumeAmounts[inputGood] = needed;
+                        }
+
+                        if (canProduce) {
+                            // Consume inputs
+                            for (const inputGood in consumeAmounts) {
+                                market[inputGood].stock -= consumeAmounts[inputGood];
+                            }
+                            // Produce output
+                            m.stock += outputAmount;
+                            // Track production status on building
+                            b._lastProduced = true;
+                        } else {
+                            // Not enough inputs — no production
+                            b._lastProduced = false;
+                        }
+                    } else {
+                        // No input requirements — simple production
+                        m.stock += outputAmount;
+                        b._lastProduced = true;
                     }
                 });
             }

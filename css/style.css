@@ -857,6 +857,43 @@ html, body {
 .build-buy-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
 .build-buy-btn:disabled { opacity: 0.25; cursor: not-allowed; filter: none; transform: none; }
 
+/* Production Chain Display */
+.production-chain {
+    margin: 4px 0 6px;
+    padding: 5px 8px;
+    background: rgba(90, 70, 30, 0.15);
+    border: 1px dashed rgba(120, 85, 40, 0.3);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+}
+.chain-flow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    line-height: 1.6;
+}
+.chain-resource {
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(90, 70, 30, 0.2);
+    white-space: nowrap;
+}
+.chain-ok { color: var(--success); }
+.chain-missing { color: var(--danger); }
+.chain-output { color: var(--accent); font-weight: 600; }
+.chain-stock { font-size: 9px; opacity: 0.7; }
+.chain-arrow { font-size: 14px; color: var(--accent); font-weight: bold; margin: 0 2px; }
+.prod-status {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+.prod-active { color: var(--success); background: rgba(46, 172, 104, 0.15); }
+.prod-idle { color: var(--danger); background: rgba(217, 64, 64, 0.15); }
+
 /* === BOTTOM BAR === */
 #bottom-bar {
     height: 72px; flex-shrink: 0;

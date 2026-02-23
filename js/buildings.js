@@ -36,9 +36,11 @@ const BUILDING_TYPES = {
         cost: 4000,
         maintenance: 35,
         maxLevel: 3,
-        description: 'Produziert Bier',
-        effect: 'Produziert Bier',
+        description: 'Verarbeitet Getreide zu Bier',
+        effect: 'Getreide \u2192 Bier',
         produces: 'beer',
+        consumes: { grain: 2 }, // 2 Getreide pro Produktionszyklus
+        consumeRate: 2, // input per output unit
         storage: 0,
         prerequisite: 'kontor'
     },
@@ -49,9 +51,11 @@ const BUILDING_TYPES = {
         cost: 5000,
         maintenance: 40,
         maxLevel: 3,
-        description: 'Produziert Eisenwaren',
-        effect: 'Produziert Eisenwaren',
+        description: 'Schmiedet aus Holz und Rohmetall Eisenwaren',
+        effect: 'Holz \u2192 Eisenwaren',
         produces: 'iron',
+        consumes: { wood: 2 }, // 2 Holz pro Produktionszyklus
+        consumeRate: 2,
         storage: 0,
         prerequisite: 'kontor'
     },
@@ -62,9 +66,11 @@ const BUILDING_TYPES = {
         cost: 5500,
         maintenance: 40,
         maxLevel: 3,
-        description: 'Produziert Tuch',
-        effect: 'Produziert Tuch',
+        description: 'Verarbeitet Pelze zu feinem Tuch',
+        effect: 'Pelze \u2192 Tuch',
         produces: 'cloth',
+        consumes: { fur: 1 }, // 1 Pelz pro Produktionszyklus
+        consumeRate: 1,
         storage: 0,
         prerequisite: 'kontor'
     },
