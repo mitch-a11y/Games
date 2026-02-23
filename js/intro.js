@@ -78,6 +78,12 @@ const Intro = {
         titleBg.onerror = () => {}; // graceful fallback
         titleBg.src = 'assets/bg-title.jpg';
 
+        // Load Leonardo menu panel image
+        const menuPanel = new Image();
+        menuPanel.onload = () => { this.bgImages.menuPanel = menuPanel; };
+        menuPanel.onerror = () => {};
+        menuPanel.src = 'assets/ui/menu_panel.jpg';
+
         // Try loading intro scene images
         ['intro-1-map', 'intro-2-ship', 'intro-3-port'].forEach(name => {
             const img = new Image();
@@ -367,13 +373,23 @@ const Intro = {
             this._drawSkipHint(ctx, w, h, t, true);
         }
         else if (this.phase === 'title') {
-            this._drawMapBackground(ctx, w, h, t);
-            this._drawTitleDarken(ctx, w, h);
-            this._drawTitleShips(ctx, w, h, t);
-            this._drawDustParticles(ctx, w, h, t);
-            this._drawVignette(ctx, w, h, 0.55);
-            this._drawTitlePanel(ctx, w, h, t);
-            this._drawCompassRose(ctx, w, h, t);
+            if (this.bgImages.menuPanel) {
+                // Leonardo image has its own map — skip canvas map
+                ctx.fillStyle = '#1a1510';
+                ctx.fillRect(0, 0, w, h);
+                this._drawTitlePanel(ctx, w, h, t);
+                this._drawDustParticles(ctx, w, h, t);
+                this._drawVignette(ctx, w, h, 0.35);
+            } else {
+                // Fallback: canvas-drawn map + panel
+                this._drawMapBackground(ctx, w, h, t);
+                this._drawTitleDarken(ctx, w, h);
+                this._drawTitleShips(ctx, w, h, t);
+                this._drawDustParticles(ctx, w, h, t);
+                this._drawVignette(ctx, w, h, 0.55);
+                this._drawTitlePanel(ctx, w, h, t);
+                this._drawCompassRose(ctx, w, h, t);
+            }
         }
     },
 
@@ -527,73 +543,65 @@ const Intro = {
         ctx.save();
         ctx.globalAlpha = this.panelAlpha;
 
-        const panelW = Math.min(460, w * 0.4);
-        const panelH = h;
-        const edgeX = panelW + 40;
+        // === LEONARDO MENU PANEL IMAGE ===
+        if (this.bgImages.menuPanel) {
+            // Draw full-width image covering the entire canvas
+            // The image has the map + panel built in — use it as the full background
+            const img = this.bgImages.menuPanel;
+            const imgRatio = img.width / img.height;
+            const screenRatio = w / h;
 
-        // === PANEL BACKGROUND ===
-        // Dark parchment gradient (left panel)
-        const panelGrad = ctx.createLinearGradient(0, 0, edgeX, 0);
-        panelGrad.addColorStop(0, 'rgba(28, 22, 14, 0.94)');
-        panelGrad.addColorStop(0.6, 'rgba(32, 26, 16, 0.88)');
-        panelGrad.addColorStop(0.85, 'rgba(24, 18, 10, 0.7)');
-        panelGrad.addColorStop(1, 'rgba(20, 14, 8, 0)');
-        ctx.fillStyle = panelGrad;
-        ctx.fillRect(0, 0, edgeX, panelH);
+            let drawW, drawH, drawX, drawY;
+            if (screenRatio > imgRatio) {
+                // Screen is wider than image — fit width
+                drawW = w;
+                drawH = w / imgRatio;
+                drawX = 0;
+                drawY = (h - drawH) / 2;
+            } else {
+                // Screen is taller — fit height
+                drawH = h;
+                drawW = h * imgRatio;
+                drawX = 0; // Align left so panel stays visible
+                drawY = 0;
+            }
 
-        // Subtle parchment texture overlay
-        ctx.globalAlpha = this.panelAlpha * 0.06;
-        for (let i = 0; i < 100; i++) {
-            const x = (Math.sin(i * 127.1 + 311.7) * 0.5 + 0.5) * panelW;
-            const y = (Math.sin(i * 269.5 + 183.3) * 0.5 + 0.5) * h;
-            const s = 2 + (Math.sin(i * 419.2) * 0.5 + 0.5) * 8;
-            ctx.fillStyle = Math.sin(i * 53.1) > 0 ? '#8a7550' : '#5a4a30';
-            ctx.fillRect(x, y, s, s);
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+            // Subtle dark overlay on the right side to blend with game map
+            const blendGrad = ctx.createLinearGradient(w * 0.5, 0, w, 0);
+            blendGrad.addColorStop(0, 'transparent');
+            blendGrad.addColorStop(0.6, 'rgba(14, 10, 6, 0.3)');
+            blendGrad.addColorStop(1, 'rgba(14, 10, 6, 0.6)');
+            ctx.fillStyle = blendGrad;
+            ctx.fillRect(0, 0, w, h);
+        } else {
+            // Fallback: generated panel (no image loaded)
+            const panelW = Math.min(460, w * 0.4);
+            const edgeX = panelW + 40;
+
+            const panelGrad = ctx.createLinearGradient(0, 0, edgeX, 0);
+            panelGrad.addColorStop(0, 'rgba(28, 22, 14, 0.94)');
+            panelGrad.addColorStop(0.6, 'rgba(32, 26, 16, 0.88)');
+            panelGrad.addColorStop(0.85, 'rgba(24, 18, 10, 0.7)');
+            panelGrad.addColorStop(1, 'rgba(20, 14, 8, 0)');
+            ctx.fillStyle = panelGrad;
+            ctx.fillRect(0, 0, edgeX, h);
+
+            // Gold accent line
+            const lineGrad = ctx.createLinearGradient(0, h * 0.1, 0, h * 0.9);
+            lineGrad.addColorStop(0, 'transparent');
+            lineGrad.addColorStop(0.2, 'rgba(200, 155, 50, 0.35)');
+            lineGrad.addColorStop(0.5, 'rgba(220, 170, 60, 0.2)');
+            lineGrad.addColorStop(0.8, 'rgba(200, 155, 50, 0.35)');
+            lineGrad.addColorStop(1, 'transparent');
+            ctx.strokeStyle = lineGrad;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(panelW, h * 0.08);
+            ctx.lineTo(panelW, h * 0.92);
+            ctx.stroke();
         }
-        ctx.globalAlpha = this.panelAlpha;
-
-        // === GOLD ACCENT LINE (right edge) ===
-        const lineGrad = ctx.createLinearGradient(0, h * 0.1, 0, h * 0.9);
-        lineGrad.addColorStop(0, 'transparent');
-        lineGrad.addColorStop(0.2, 'rgba(200, 155, 50, 0.35)');
-        lineGrad.addColorStop(0.5, 'rgba(220, 170, 60, 0.2)');
-        lineGrad.addColorStop(0.8, 'rgba(200, 155, 50, 0.35)');
-        lineGrad.addColorStop(1, 'transparent');
-        ctx.strokeStyle = lineGrad;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(panelW, h * 0.08);
-        ctx.lineTo(panelW, h * 0.92);
-        ctx.stroke();
-
-        // Small ornamental diamond on the line
-        const diamondY = h * 0.5;
-        ctx.fillStyle = 'rgba(200, 155, 50, 0.4)';
-        ctx.beginPath();
-        ctx.moveTo(panelW, diamondY - 8);
-        ctx.lineTo(panelW + 5, diamondY);
-        ctx.moveTo(panelW, diamondY + 8);
-        ctx.lineTo(panelW + 5, diamondY);
-        ctx.moveTo(panelW, diamondY - 8);
-        ctx.lineTo(panelW - 5, diamondY);
-        ctx.moveTo(panelW, diamondY + 8);
-        ctx.lineTo(panelW - 5, diamondY);
-        ctx.closePath();
-        ctx.stroke();
-
-        // === TOP ORNAMENT LINE ===
-        ctx.strokeStyle = 'rgba(180, 140, 50, 0.15)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(30, h * 0.25);
-        ctx.lineTo(panelW - 30, h * 0.25);
-        ctx.stroke();
-
-        // === BOTTOM ORNAMENT LINE ===
-        ctx.beginPath();
-        ctx.moveTo(30, h * 0.82);
-        ctx.lineTo(panelW - 30, h * 0.82);
-        ctx.stroke();
 
         ctx.restore();
     },
