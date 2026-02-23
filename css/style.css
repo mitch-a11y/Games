@@ -894,6 +894,67 @@ html, body {
 .prod-active { color: var(--success); background: rgba(46, 172, 104, 0.15); }
 .prod-idle { color: var(--danger); background: rgba(217, 64, 64, 0.15); }
 
+/* === DIPLOMACY / REPUTATION === */
+.rep-display {
+    background: rgba(90, 70, 30, 0.15);
+    border: 1px solid rgba(120, 85, 40, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    margin: 6px 0;
+}
+.rep-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.rep-label { font-size: 11px; color: var(--parchment-dim); }
+.rep-value { font-size: 12px; font-weight: 600; }
+.rep-progress-bar {
+    height: 4px;
+    background: rgba(120, 85, 40, 0.2);
+    border-radius: 2px;
+    margin: 4px 0;
+    overflow: hidden;
+}
+.rep-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e8a020, #ffd700);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+.rep-next { font-size: 9px; color: var(--parchment-dim); }
+.rep-bonus { font-size: 10px; color: var(--success); display: block; margin-top: 2px; }
+.diplo-section { margin: 10px 0; }
+.diplo-section h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--parchment-dim);
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+.diplo-action {
+    background: var(--parchment-card);
+    border: 1px solid rgba(120, 85, 40, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    margin-bottom: 6px;
+    transition: all var(--transition);
+}
+.diplo-action:hover { background: var(--parchment-card-hover); }
+.diplo-unavailable { opacity: 0.5; }
+.diplo-action-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.diplo-cost { color: #8b6914; }
+.diplo-desc { font-size: 10px; color: var(--parchment-dim); margin-bottom: 4px; }
+.diplo-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #3a5a7a, #4a7aaa);
+    color: #f5eed8;
+    border: 1px solid rgba(60, 100, 140, 0.5);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.diplo-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.diplo-blocked { font-size: 10px; color: var(--danger); font-style: italic; }
+
 /* === BANK TAB === */
 .bank-overview {
     background: rgba(90, 70, 30, 0.15);

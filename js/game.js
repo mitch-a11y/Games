@@ -345,6 +345,11 @@ const Game = {
             Bank.monthlyProcess(this.state);
         }
 
+        // Diplomacy reputation processing
+        if (typeof Diplomacy !== 'undefined') {
+            Diplomacy.monthlyProcess(this.state);
+        }
+
         if (totalMaintenance > 0) {
             this.state.player.gold -= totalMaintenance;
             UI.addLogMessage(

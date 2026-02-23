@@ -117,6 +117,20 @@ const UI = {
         if (this.isMobile()) this.toggleMobilePanel(true);
     },
 
+    doDiplomacy(cityId, actionId) {
+        if (typeof Diplomacy === 'undefined') return;
+        const result = Diplomacy.performAction(Game.state, cityId, actionId);
+        if (result.success) {
+            Sound.play('coins');
+            this.addLogMessage(result.message, 'trade');
+            this.showNotification(result.message, 'success');
+        } else {
+            this.showNotification(result.message, 'warning');
+        }
+        this.updateCityTab();
+        this.updateTopBar(Game.state);
+    },
+
     updateCityTab() {
         const cityId = GameMap.selectedCity;
         if (!cityId || !Game.state) {
@@ -142,9 +156,26 @@ const UI = {
             html += this.detailRow('Eure Gebaeude', cityState.playerBuildings.map(b => BUILDING_TYPES[b.type].icon).join(' '));
         }
 
-        // Reputation
-        const rep = cityState.reputation || 0;
-        html += this.detailRow('Ansehen', rep > 0 ? `<span style="color:var(--success)">+${rep}</span>` : `${rep}`);
+        // Reputation & Diplomacy
+        const playerRep = Game.state.player.reputation[cityId] || 0;
+        if (typeof Diplomacy !== 'undefined') {
+            const level = Diplomacy.getLevel(playerRep);
+            const nextLevel = Diplomacy.getNextLevel(playerRep);
+            const progressHTML = nextLevel
+                ? `<div class="rep-progress-bar"><div class="rep-progress-fill" style="width:${Math.min(100, ((playerRep - level.min) / (nextLevel.min - level.min)) * 100)}%"></div></div><span class="rep-next">Naechst: ${nextLevel.name} (${nextLevel.min})</span>`
+                : '<span class="rep-next" style="color:var(--gold-color)">Maximaler Rang!</span>';
+            html += `<div class="rep-display">
+                <div class="rep-header">
+                    <span class="rep-label">Ansehen</span>
+                    <span class="rep-value" style="color:${level.color}">${level.icon} ${level.name} (${playerRep})</span>
+                </div>
+                ${progressHTML}
+                ${level.priceBonus > 0 ? `<span class="rep-bonus">Preisbonus: ${(level.priceBonus * 100).toFixed(0)}%</span>` : ''}
+            </div>`;
+        } else {
+            const rep = cityState.reputation || 0;
+            html += this.detailRow('Ansehen', rep > 0 ? `<span style="color:var(--success)">+${rep}</span>` : `${rep}`);
+        }
 
         // Ships docked here
         const dockedShips = Game.state.player.ships.filter(s => s.location === cityId);
@@ -169,6 +200,28 @@ const UI = {
         // Net worth
         const netWorth = Game.calculateNetWorth();
         html += this.detailRow('Vermoegen', `<span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span>`);
+
+        // Diplomacy actions
+        if (typeof Diplomacy !== 'undefined') {
+            const actions = Diplomacy.getAvailableActions(Game.state, cityId);
+            const hasKontor = (cityState.playerBuildings || []).some(b => b.type === 'kontor');
+            if (hasKontor) {
+                html += '<div class="diplo-section"><h4>Diplomatie</h4>';
+                actions.forEach(action => {
+                    html += `<div class="diplo-action ${action.available ? '' : 'diplo-unavailable'}">
+                        <div class="diplo-action-header">
+                            <span>${action.icon} ${action.name}</span>
+                            <span class="diplo-cost">${Utils.formatGold(action.cost)}</span>
+                        </div>
+                        <div class="diplo-desc">${action.description} <em>(+${action.repGain} Ansehen)</em></div>
+                        ${action.available
+                            ? `<button class="diplo-btn" onclick="UI.doDiplomacy('${cityId}','${action.id}')">Ausfuehren</button>`
+                            : `<span class="diplo-blocked">${action.reason}</span>`}
+                    </div>`;
+                });
+                html += '</div>';
+            }
+        }
 
         // Market overview with mini charts
         html += '<div class="city-goods-section"><h4>Marktpreise</h4>';

@@ -175,7 +175,10 @@ const Trading = {
 
         if (actual <= 0) return { success: false, message: 'Kauf nicht moeglich.' };
 
-        const cost = actual * market.price;
+        // Apply reputation price bonus (discount on buying)
+        const repBonus = (typeof Diplomacy !== 'undefined') ? Diplomacy.getPriceBonus(gameState, cityId) : 0;
+        const effectivePrice = Math.max(1, Math.round(market.price * (1 - repBonus)));
+        const cost = actual * effectivePrice;
         player.gold -= cost;
         market.stock -= actual;
         market.totalBought += actual;
@@ -183,6 +186,9 @@ const Trading = {
 
         market.stock = Math.max(0, market.stock);
         player.totalTraded += cost;
+
+        // Reputation gain from trading
+        if (typeof Diplomacy !== 'undefined') Diplomacy.onTrade(gameState, cityId, cost);
 
         return {
             success: true,
@@ -203,12 +209,18 @@ const Trading = {
 
         if (actual <= 0) return { success: false, message: 'Verkauf nicht moeglich.' };
 
-        const revenue = actual * market.price;
+        // Apply reputation price bonus (premium on selling)
+        const repBonus = (typeof Diplomacy !== 'undefined') ? Diplomacy.getPriceBonus(gameState, cityId) : 0;
+        const effectivePrice = Math.round(market.price * (1 + repBonus));
+        const revenue = actual * effectivePrice;
         player.gold += revenue;
         market.stock += actual;
         market.totalSold += actual;
         removeCargo(ship, goodId, actual);
         player.totalTraded += revenue;
+
+        // Reputation gain from trading
+        if (typeof Diplomacy !== 'undefined') Diplomacy.onTrade(gameState, cityId, revenue);
 
         return {
             success: true,
