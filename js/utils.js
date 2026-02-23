@@ -85,5 +85,45 @@ const Utils = {
     // Generate unique ID
     uid() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    },
+
+    // Catmull-Rom spline interpolation between 4 points at parameter t (0-1)
+    catmullRom(p0, p1, p2, p3, t) {
+        const t2 = t * t;
+        const t3 = t2 * t;
+        return {
+            x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t +
+                (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+                (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+            y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t +
+                (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+                (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+        };
+    },
+
+    // Generate smooth spline points from a set of control points
+    // Returns array of {x,y} along the spline
+    splinePoints(controlPoints, segmentsPerCurve = 12) {
+        if (controlPoints.length < 2) return [...controlPoints];
+        if (controlPoints.length === 2) return [...controlPoints];
+
+        const pts = controlPoints;
+        const result = [];
+
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p0 = pts[Math.max(i - 1, 0)];
+            const p1 = pts[i];
+            const p2 = pts[Math.min(i + 1, pts.length - 1)];
+            const p3 = pts[Math.min(i + 2, pts.length - 1)];
+
+            const steps = (i === pts.length - 2) ? segmentsPerCurve : segmentsPerCurve;
+            for (let s = 0; s < steps; s++) {
+                const t = s / steps;
+                result.push(this.catmullRom(p0, p1, p2, p3, t));
+            }
+        }
+        // Push final point
+        result.push({ x: pts[pts.length - 1].x, y: pts[pts.length - 1].y });
+        return result;
     }
 };

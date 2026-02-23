@@ -6,18 +6,28 @@ const EVENT_TEMPLATES = [
     {
         id: 'pirate_attack',
         name: 'Piratenangriff!',
-        icon: '\uD83C\uDFF4\u200D\u2620\uFE0F',
+        icon: '🏴‍☠️',
         text: 'Piraten greifen {ship} nahe {city} an!',
         type: 'combat',
         chance: 0.12,
         requiresSailing: true,
+        interactive: true,
         effect(gameState, params) {
             const ship = params.ship;
+            const nearCity = ship.route ? ship.route[ship.routeIndex] : null;
 
-            // Trigger interactive naval combat instead of passive damage
-            Combat.startCombat(ship, gameState);
+            // Launch interactive combat for player ships
+            const isPlayerShip = Game.state.player.ships.some(s => s.id === ship.id);
+            if (typeof Combat !== 'undefined' && isPlayerShip) {
+                Combat.initCombat(ship, 'pirate', nearCity);
+                return `Piraten greifen ${ship.name} an! Bereitet euch auf den Kampf vor!`;
+            }
 
-            return `${ship.name} wird von Piraten angegriffen! Zum Kampf!`;
+            // Fallback for AI ships: auto-resolve
+            const damage = Utils.randInt(10, 30);
+            ship.hull = Math.max(1, ship.hull - damage);
+            if (ship.hull < ship.maxHull * 0.3) ship.damaged = true;
+            return `${ship.name} wurde von Piraten angegriffen! ${damage} Rumpfschaden.`;
         }
     },
     {
@@ -155,7 +165,6 @@ const EVENT_TEMPLATES = [
             if (cityState.playerBuildings && cityState.playerBuildings.length > 0 && Math.random() < 0.2) {
                 const idx = Utils.randInt(0, cityState.playerBuildings.length - 1);
                 const destroyed = cityState.playerBuildings.splice(idx, 1)[0];
-                Reputation.onBuildingDestroyed(gameState);
                 return `Stadtbrand in ${CITIES_DATA[cityId].displayName}! Ihr ${BUILDING_TYPES[destroyed.type].name} wurde zerstoert!`;
             }
 
@@ -221,6 +230,162 @@ const EVENT_TEMPLATES = [
             gameState.player.gold = Math.max(0, gameState.player.gold - tax);
             return `Gildenabgabe faellig! ${Utils.formatGold(tax)} bezahlt.`;
         }
+    },
+    // === NEW EVENTS ===
+    {
+        id: 'foreign_merchant',
+        name: 'Fremder Händler',
+        icon: '🧳',
+        text: 'Ein fremder Händler bietet seltene Waren an!',
+        type: 'city',
+        chance: 0.06,
+        requiresSailing: false,
+        effect(gameState, params) {
+            const cityId = params.cityId;
+            const cityState = gameState.cities[cityId];
+            const goods = ['spices', 'wine', 'fur'];
+            const g = Utils.pick(goods);
+            const amount = Utils.randInt(5, 20);
+            cityState.market[g].stock += amount;
+            cityState.market[g].price = Math.round(cityState.market[g].price * 0.8);
+            return `Fremder Händler in ${CITIES_DATA[cityId].displayName}! ${amount} ${GOODS[g].name} günstig angeboten.`;
+        }
+    },
+    {
+        id: 'trade_embargo',
+        name: 'Handelsembargo',
+        icon: '🚫',
+        text: 'Handelsembargo verhängt!',
+        type: 'city',
+        chance: 0.03,
+        requiresSailing: false,
+        effect(gameState, params) {
+            const cityId = params.cityId;
+            const cityState = gameState.cities[cityId];
+            // Drastically reduce all stocks
+            GOOD_IDS.forEach(gid => {
+                cityState.market[gid].stock = Math.max(0, cityState.market[gid].stock * 0.4);
+                cityState.market[gid].price = Math.round(cityState.market[gid].price * 1.5);
+            });
+            return `Handelsembargo in ${CITIES_DATA[cityId].displayName}! Waren knapp, Preise steigen drastisch!`;
+        }
+    },
+    {
+        id: 'whale_sighting',
+        name: 'Walsichtung',
+        icon: '🐋',
+        text: 'Wale gesichtet!',
+        type: 'weather',
+        chance: 0.08,
+        requiresSailing: true,
+        effect(gameState, params) {
+            const ship = params.ship;
+            // Bonus fish cargo if space
+            const fishAdded = addCargo(ship, 'fish', Utils.randInt(3, 10));
+            if (fishAdded > 0) {
+                return `${ship.name}: Wale gesichtet! Crew fängt ${fishAdded} Fisch als Beifang.`;
+            }
+            return `${ship.name}: Wale gesichtet! Ein gutes Omen für die Reise.`;
+        }
+    },
+    {
+        id: 'guild_feast',
+        name: 'Gildenfest',
+        icon: '🎉',
+        text: 'Die Kaufmannsgilde feiert!',
+        type: 'player',
+        chance: 0.05,
+        requiresSailing: false,
+        effect(gameState, params) {
+            // Reputation boost in random city
+            const cityId = Utils.pick(CITY_IDS);
+            if (gameState.cities[cityId]) {
+                gameState.cities[cityId].reputation = (gameState.cities[cityId].reputation || 0) + 5;
+                gameState.player.reputation[cityId] = (gameState.player.reputation[cityId] || 0) + 5;
+            }
+            return `Gildenfest! Euer Ansehen in ${CITIES_DATA[cityId].displayName} steigt!`;
+        }
+    },
+    {
+        id: 'smuggler_offer',
+        name: 'Schmuggler',
+        icon: '🕵️',
+        text: 'Ein Schmuggler bietet illegale Ware an!',
+        type: 'player',
+        chance: 0.04,
+        requiresSailing: false,
+        effect(gameState, params) {
+            // Give player cheap spices but risk reputation loss
+            const bonus = Utils.randInt(100, 400);
+            gameState.player.gold += bonus;
+            // Small reputation hit in home city
+            const homeCity = gameState.player.homeCity;
+            if (gameState.cities[homeCity]) {
+                gameState.cities[homeCity].reputation = Math.max(0, (gameState.cities[homeCity].reputation || 0) - 2);
+            }
+            return `Ein Schmuggler zahlt ${Utils.formatGold(bonus)} für eure Diskretion. Euer Ruf leidet etwas.`;
+        }
+    },
+    {
+        id: 'crew_mutiny',
+        name: 'Meuterei!',
+        icon: '⚔️',
+        text: 'Unruhe an Bord!',
+        type: 'combat',
+        chance: 0.03,
+        requiresSailing: true,
+        effect(gameState, params) {
+            const ship = params.ship;
+            const crewLost = Math.max(1, Math.floor(ship.crew * Utils.rand(0.1, 0.25)));
+            ship.crew = Math.max(3, ship.crew - crewLost);
+            return `Meuterei auf ${ship.name}! ${crewLost} Matrosen desertieren.`;
+        }
+    },
+    {
+        id: 'winter_storm',
+        name: 'Wintersturm',
+        icon: '🌊',
+        text: 'Schwerer Wintersturm!',
+        type: 'weather',
+        chance: 0.12,
+        requiresSailing: true,
+        seasonRequired: 'winter',
+        effect(gameState, params) {
+            const ship = params.ship;
+            const damage = Utils.randInt(10, 35);
+            ship.hull = Math.max(1, ship.hull - damage);
+            ship.progress = Math.max(0, ship.progress - 0.3);
+            if (ship.hull < ship.maxHull * 0.3) ship.damaged = true;
+            // Lose some cargo
+            const goodIds = Object.keys(ship.cargo).filter(g => ship.cargo[g] > 0);
+            if (goodIds.length > 0) {
+                const lostGood = Utils.pick(goodIds);
+                const lostAmt = Math.min(ship.cargo[lostGood], Utils.randInt(2, 8));
+                removeCargo(ship, lostGood, lostAmt);
+                return `Wintersturm trifft ${ship.name}! ${damage} Schaden, ${lostAmt} ${GOODS[lostGood].name} über Bord!`;
+            }
+            return `Wintersturm trifft ${ship.name}! ${damage} Rumpfschaden, Reise stark verzögert!`;
+        }
+    },
+    {
+        id: 'summer_fair',
+        name: 'Sommermesse',
+        icon: '🏪',
+        text: 'Große Handelsmesse!',
+        type: 'city',
+        chance: 0.07,
+        requiresSailing: false,
+        seasonRequired: 'summer',
+        effect(gameState, params) {
+            const cityId = params.cityId;
+            const cityState = gameState.cities[cityId];
+            // Boost all stocks and lower prices
+            GOOD_IDS.forEach(gid => {
+                cityState.market[gid].stock += Utils.randInt(5, 15);
+                cityState.market[gid].price = Math.round(cityState.market[gid].price * 0.85);
+            });
+            return `Große Sommermesse in ${CITIES_DATA[cityId].displayName}! Alle Waren reichlich und günstig!`;
+        }
     }
 ];
 
@@ -230,11 +395,14 @@ const Events = {
     checkEvents(gameState) {
         const eventChanceMod = CONFIG.DIFFICULTY[gameState.difficulty].eventChance;
         const events = [];
+        const currentSeason = typeof Game !== 'undefined' && Game.getSeason ? Game.getSeason() : 'summer';
 
         // Check ship events
         gameState.player.ships.forEach(ship => {
             if (ship.status === 'sailing') {
                 EVENT_TEMPLATES.filter(e => e.requiresSailing).forEach(evt => {
+                    // Skip if season doesn't match
+                    if (evt.seasonRequired && evt.seasonRequired !== currentSeason) return;
                     if (Math.random() < evt.chance * eventChanceMod * 0.3) {
                         const nearCity = ship.route ? ship.route[ship.routeIndex] : 'See';
                         const msg = evt.effect(gameState, { ship, cityId: nearCity });
@@ -251,6 +419,7 @@ const Events = {
         // Check city events
         const randomCity = Utils.pick(CITY_IDS);
         EVENT_TEMPLATES.filter(e => e.type === 'city').forEach(evt => {
+            if (evt.seasonRequired && evt.seasonRequired !== currentSeason) return;
             if (Math.random() < evt.chance * eventChanceMod * 0.15) {
                 const msg = evt.effect(gameState, { cityId: randomCity });
                 events.push({
@@ -263,6 +432,7 @@ const Events = {
 
         // Check player events
         EVENT_TEMPLATES.filter(e => e.type === 'player').forEach(evt => {
+            if (evt.seasonRequired && evt.seasonRequired !== currentSeason) return;
             if (Math.random() < evt.chance * eventChanceMod * 0.1) {
                 const msg = evt.effect(gameState, {});
                 events.push({

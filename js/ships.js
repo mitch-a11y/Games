@@ -90,6 +90,7 @@ function createShip(typeId, name, location) {
         maxHull: type.hull,
         hull: type.hull,
         crew: type.crew,
+        maxCrew: type.crew,
         cannons: type.cannons,
         maintenance: type.maintenance,
         cargo: {},           // { goodId: amount }
@@ -143,6 +144,60 @@ function removeCargo(ship, goodId, amount) {
     ship.cargoUsed = getCargoCount(ship);
     return actual;
 }
+
+// Convoy system — group ships at same location for travel
+const Convoy = {
+    // Create a convoy from selected ships
+    create(ships) {
+        const convoyId = Utils.uid();
+        const slowest = Math.min(...ships.map(s => s.speed));
+        ships.forEach(s => {
+            s.convoyId = convoyId;
+            s.convoySpeed = slowest;
+        });
+        return convoyId;
+    },
+
+    // Disband a convoy
+    disband(ships, convoyId) {
+        ships.forEach(s => {
+            if (s.convoyId === convoyId) {
+                delete s.convoyId;
+                delete s.convoySpeed;
+            }
+        });
+    },
+
+    // Get all ships in a convoy
+    getShips(allShips, convoyId) {
+        if (!convoyId) return [];
+        return allShips.filter(s => s.convoyId === convoyId);
+    },
+
+    // Get combined combat stats for a convoy
+    getCombatStats(allShips, convoyId) {
+        const ships = this.getShips(allShips, convoyId);
+        return {
+            totalCannons: ships.reduce((sum, s) => sum + s.cannons, 0),
+            totalCrew: ships.reduce((sum, s) => sum + s.crew, 0),
+            totalHull: ships.reduce((sum, s) => sum + s.hull, 0),
+            shipCount: ships.length
+        };
+    },
+
+    // Send convoy to destination
+    sail(ships, convoyId, route) {
+        const convoyShips = this.getShips(ships, convoyId);
+        convoyShips.forEach(ship => {
+            ship.route = [...route];
+            ship.routeIndex = 0;
+            ship.progress = 0;
+            ship.status = 'sailing';
+            ship.destination = route[route.length - 1];
+            ship.location = null;
+        });
+    }
+};
 
 // Ship name generator
 const SHIP_NAMES = [

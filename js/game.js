@@ -25,7 +25,17 @@ const Game = {
                 ships: [],
                 reputation: {},
                 totalTraded: 0,
-                daysPlayed: 0
+                totalProfit: 0,
+                totalSpent: 0,
+                voyagesCompleted: 0,
+                battlesWon: 0,
+                battlesLost: 0,
+                battlesFled: 0,
+                goodsTraded: {},
+                wealthHistory: [],
+                daysPlayed: 0,
+                tutorialStep: 0,
+                tutorialDone: false
             },
             date: {
                 day: 1,
@@ -77,13 +87,6 @@ const Game = {
         // Set initial reputation
         this.state.player.reputation[homeCity] = 10;
 
-        // Initialize quests
-        Quests.init(this.state);
-
-        // Initialize reputation system
-        Reputation.init(this.state);
-
-        this._isNewGame = true;
         this.start();
     },
 
@@ -108,14 +111,27 @@ const Game = {
         Sound.init();
         Sound.play('newgame');
 
+        // Start tutorial for new players
+        if (!this.state.player.tutorialDone) {
+            setTimeout(() => UI.showTutorial(), 2500);
+        }
+
         // Start game loop
         this.gameLoop();
+    },
 
-        // Offer tutorial for new games (not loads)
-        if (this._isNewGame) {
-            this._isNewGame = false;
-            setTimeout(() => Tutorial.offer(), 600);
-        }
+    // Season helper (1=Spring, 2=Summer, 3=Autumn, 4=Winter)
+    getSeason() {
+        const m = this.state.date.month;
+        if (m >= 3 && m <= 5) return 'spring';
+        if (m >= 6 && m <= 8) return 'summer';
+        if (m >= 9 && m <= 11) return 'autumn';
+        return 'winter';
+    },
+
+    getSeasonName() {
+        const s = this.getSeason();
+        return s === 'spring' ? 'Frühling' : s === 'summer' ? 'Sommer' : s === 'autumn' ? 'Herbst' : 'Winter';
     },
 
     gameLoop() {
@@ -138,11 +154,6 @@ const Game = {
         // Render
         GameMap.render(this.state);
 
-        // Update ambient sound parameters
-        if (typeof Sound !== 'undefined' && Sound.updateAmbient) {
-            Sound.updateAmbient(this.state);
-        }
-
         requestAnimationFrame(() => this.gameLoop());
     },
 
@@ -159,12 +170,26 @@ const Game = {
         // Update AI
         this.state.aiTraders.forEach(ai => AITrader.update(ai, this.state));
 
-        // Update markets (every 3 days)
+        // Update markets (every 3 days) with seasonal modifiers
         if (this.state.date.day % 3 === 0) {
             const diffMod = CONFIG.DIFFICULTY[this.state.difficulty].priceBonus;
+            const season = this.getSeason();
             CITY_IDS.forEach(cityId => {
-                Trading.updateMarket(this.state.cities[cityId], diffMod);
+                Trading.updateMarket(this.state.cities[cityId], diffMod, season);
             });
+        }
+
+        // Seasonal announcement (first day of new season)
+        if (this.state.date.day === 1 && [3, 6, 9, 12].includes(this.state.date.month)) {
+            const seasonName = this.getSeasonName();
+            const seasonEffects = {
+                'Frühling': '🌱 Getreidepreise fallen, Schiffsverkehr nimmt zu.',
+                'Sommer': '☀️ Beste Handelssaison! Alle Routen sicher.',
+                'Herbst': '🍂 Erntezeit — Getreide billig, Pelze teurer.',
+                'Winter': '❄️ Stürme häufiger, Holz & Salz teurer, Pelze im Überfluss.'
+            };
+            UI.addLogMessage(`${seasonName} ist angebrochen! ${seasonEffects[seasonName]}`, 'event');
+            UI.showNotification(`${seasonName} beginnt!`, 'info');
         }
 
         // Change wind periodically
@@ -176,23 +201,25 @@ const Game = {
             UI.updateWind(this.state);
         }
 
-        // Check events (skip if combat is active)
+        // Check events
         this.state.eventCooldown--;
-        if (!Combat.active && this.state.eventCooldown <= 0 && this.state.date.day % CONFIG.EVENT_CHECK_INTERVAL === 0) {
-            const events = Events.checkEvents(this.state);
-            events.forEach(evt => {
-                // Combat events are handled by the Combat system (modal already shown)
-                if (evt.template.type === 'combat' && Combat.active) {
-                    UI.addLogMessage(evt.message, 'danger');
-                    this.state.eventCooldown = 15;
-                    return;
-                }
-                UI.addLogMessage(evt.message, evt.template.type === 'combat' ? 'danger' : 'event');
-                if (evt.template.id === 'plague' || evt.template.id === 'fire') {
-                    UI.showEventPopup(evt);
-                    this.state.eventCooldown = 10;
-                }
-            });
+        if (this.state.eventCooldown <= 0 && this.state.date.day % CONFIG.EVENT_CHECK_INTERVAL === 0) {
+            // Skip events during active combat
+            if (typeof Combat !== 'undefined' && Combat.active) {
+                // Don't check events while player is in combat
+            } else {
+                const events = Events.checkEvents(this.state);
+                events.forEach(evt => {
+                    UI.addLogMessage(evt.message, evt.template.type === 'combat' ? 'danger' : 'event');
+                    // Don't show popup for interactive combat (Combat.initCombat handles its own UI)
+                    if (evt.template.interactive) {
+                        this.state.eventCooldown = 10;
+                    } else if (evt.template.type === 'combat' || evt.template.id === 'plague' || evt.template.id === 'fire') {
+                        UI.showEventPopup(evt);
+                        this.state.eventCooldown = 10;
+                    }
+                });
+            }
         }
 
         // Monthly processing
@@ -207,14 +234,9 @@ const Game = {
         // Update player rank
         this.checkRankUp();
 
-        // Check quests periodically
-        if (this.state.player.daysPlayed % 5 === 0) {
-            const completed = Quests.checkQuests(this.state);
-            completed.forEach(quest => {
-                Reputation.onQuestComplete(this.state, quest);
-                UI.addLogMessage(`Auftrag abgeschlossen: ${quest.name} - ${quest.rewardText} erhalten!`, 'event');
-                UI.showQuestComplete(quest);
-            });
+        // Update ambient sounds (every 10 days)
+        if (this.state.date.day % 10 === 0) {
+            Sound.updateAmbient(this.state);
         }
 
         // Update UI periodically
@@ -255,8 +277,9 @@ const Game = {
 
             const distance = routeInfo ? routeInfo.distance : 5;
 
-            // Calculate speed with wind effect
-            let speed = ship.speed * CONFIG.SHIP_SPEED_BASE;
+            // Calculate speed with wind effect (use convoy speed if in convoy)
+            const baseSpeed = ship.convoySpeed || ship.speed;
+            let speed = baseSpeed * CONFIG.SHIP_SPEED_BASE;
             // Wind bonus/penalty
             const windEffect = (Math.random() - 0.3) * CONFIG.WIND_EFFECT * this.state.wind.strength;
             speed += windEffect;
@@ -284,46 +307,44 @@ const Game = {
         ship.progress = 0;
         ship.destination = null;
 
-        // Track city visit for quests
-        Quests.trackCityVisit(this.state, dest);
-
-        // Track city visit for reputation (first visit bonus)
-        Reputation.onCityVisit(this.state, dest);
-
         UI.addLogMessage(`${ship.name} ist in ${CITIES_DATA[dest].displayName} angekommen.`, 'info');
         Sound.play('arrive');
 
-        // Arrival particle effect
-        GameMap.spawnArrivalParticles(dest);
+        // Track stats
+        if (!this.state.player.voyagesCompleted) this.state.player.voyagesCompleted = 0;
+        this.state.player.voyagesCompleted++;
 
-        // Auto-select city
-        if (GameMap.selectedCity !== dest) {
+        // Process auto-trade if configured
+        if (ship.autoTrade) {
+            // Small delay so the market settles
+            setTimeout(() => {
+                if (ship.status === 'docked' && ship.autoTrade) {
+                    Trading.processAutoTrade(this.state, ship);
+                }
+            }, 100);
+        }
+
+        // Auto-select city if no active combat
+        if (GameMap.selectedCity !== dest && !(typeof Combat !== 'undefined' && Combat.active)) {
             GameMap.selectCity(dest);
         }
     },
 
     monthlyUpdate() {
-        // Maintenance costs (with reputation discount)
-        const maintenanceDiscount = Reputation.getMaintenanceDiscount(this.state);
-        const rawShipMaint = this.state.player.ships.reduce(
+        // Maintenance costs
+        const shipMaintenance = this.state.player.ships.reduce(
             (sum, s) => sum + s.maintenance, 0
         );
-        const rawBuildingMaint = Buildings.getMaintenanceCost(this.state);
-        const shipMaintenance = Math.round(rawShipMaint * (1 - maintenanceDiscount));
-        const buildingMaintenance = Math.round(rawBuildingMaint * (1 - maintenanceDiscount));
+        const buildingMaintenance = Buildings.getMaintenanceCost(this.state);
         const totalMaintenance = shipMaintenance + buildingMaintenance;
 
         if (totalMaintenance > 0) {
             this.state.player.gold -= totalMaintenance;
-            const discountText = maintenanceDiscount > 0 ? ` (${Math.round(maintenanceDiscount * 100)}% Rang-Rabatt)` : '';
             UI.addLogMessage(
-                `Monatliche Kosten: ${Utils.formatGold(totalMaintenance)} (Schiffe: ${shipMaintenance}, Gebaeude: ${buildingMaintenance})${discountText}`,
+                `Monatliche Kosten: ${Utils.formatGold(totalMaintenance)} (Schiffe: ${shipMaintenance}, Gebaeude: ${buildingMaintenance})`,
                 'info'
             );
         }
-
-        // Reputation monthly check (bankruptcy, gold milestones)
-        Reputation.onMonthlyCheck(this.state);
 
         // Population growth in cities
         CITY_IDS.forEach(cityId => {
@@ -354,19 +375,48 @@ const Game = {
             });
         });
 
-        // Check for bankruptcy
-        if (this.state.player.gold < -1000) {
+        // Track wealth history (for stats chart)
+        const currentWealth = this.calculateNetWorth();
+        if (!this.state.player.wealthHistory) this.state.player.wealthHistory = [];
+        this.state.player.wealthHistory.push({
+            month: this.state.date.month,
+            year: this.state.date.year,
+            wealth: currentWealth,
+            gold: this.state.player.gold
+        });
+        // Keep last 60 months
+        if (this.state.player.wealthHistory.length > 60) {
+            this.state.player.wealthHistory.shift();
+        }
+
+        // Check for bankruptcy (game over)
+        if (this.state.player.gold < -5000) {
+            this.triggerGameOver('bankruptcy');
+            return;
+        } else if (this.state.player.gold < -1000) {
             UI.showNotification('Achtung: Ihr seid hoch verschuldet!', 'danger');
             UI.addLogMessage('Warnung: Eure Schulden wachsen! Handelt, um sie zu tilgen.', 'danger');
+        }
+
+        // Check for victory (Eldermann rank + 500k wealth)
+        if (this.state.player.rankIndex >= CONFIG.RANKS.length - 1 && currentWealth >= 500000) {
+            this.triggerVictory();
         }
     },
 
     checkRankUp() {
-        const result = Reputation.checkRankUp(this.state);
-        if (result.promoted) {
-            UI.showRepRankUp(result.oldRank, result.newRank);
-            UI.addLogMessage(`Befoerderung! Ihr seid jetzt ${result.newRank.displayName}!`, 'event');
-            Sound.play('newgame');
+        const player = this.state.player;
+        const wealth = this.calculateNetWorth();
+
+        for (let i = CONFIG.RANKS.length - 1; i >= 0; i--) {
+            if (wealth >= CONFIG.RANKS[i].minWealth && i > player.rankIndex) {
+                const oldRank = player.rank;
+                player.rankIndex = i;
+                player.rank = CONFIG.RANKS[i].name;
+                UI.showRankUp(oldRank, player.rank);
+                UI.addLogMessage(`Befoerderung! Ihr seid jetzt ${player.rank}!`, 'event');
+                break;
+            }
         }
     },
 
@@ -438,8 +488,6 @@ const Game = {
                 });
             });
             if (!this.state.player.totalTraded) this.state.player.totalTraded = 0;
-            Quests.migrate(this.state);
-            Reputation.migrate(this.state);
             this.start();
             return true;
         } catch (e) {
@@ -448,13 +496,74 @@ const Game = {
         }
     },
 
+    // Victory!
+    triggerVictory() {
+        this.paused = true;
+        Sound.play('victory');
+        Sound.stopAmbient();
+        const stats = this.getGameStats();
+        UI.showGameEndScreen('victory', stats);
+    },
+
+    // Game Over
+    triggerGameOver(reason) {
+        this.paused = true;
+        Sound.play('defeat');
+        Sound.stopAmbient();
+        const stats = this.getGameStats();
+        stats.reason = reason;
+        UI.showGameEndScreen('defeat', stats);
+    },
+
+    // Compile comprehensive game statistics
+    getGameStats() {
+        const p = this.state.player;
+        const wealth = this.calculateNetWorth();
+        const totalShipValue = p.ships.reduce((sum, s) => sum + Math.floor(SHIP_TYPES[s.typeId].cost * 0.6), 0);
+        const totalBuildingValue = CITY_IDS.reduce((sum, cid) => {
+            const buildings = this.state.cities[cid].playerBuildings || [];
+            return sum + buildings.reduce((bs, b) => {
+                const bt = BUILDING_TYPES[b.type];
+                return bs + (bt ? bt.cost * b.level : 0);
+            }, 0);
+        }, 0);
+        const totalCargoValue = p.ships.reduce((sum, ship) => {
+            return sum + Object.entries(ship.cargo).reduce((cs, [gid, amt]) => {
+                return cs + (GOODS[gid] ? GOODS[gid].basePrice * amt : 0);
+            }, 0);
+        }, 0);
+
+        return {
+            playerName: p.name,
+            rank: p.rank,
+            daysPlayed: p.daysPlayed,
+            yearsPlayed: Math.floor(p.daysPlayed / (CONFIG.DAYS_PER_MONTH * 12)),
+            wealth: wealth,
+            gold: p.gold,
+            shipValue: totalShipValue,
+            buildingValue: totalBuildingValue,
+            cargoValue: totalCargoValue,
+            shipCount: p.ships.length,
+            totalTraded: p.totalTraded || 0,
+            totalProfit: p.totalProfit || 0,
+            voyagesCompleted: p.voyagesCompleted || 0,
+            battlesWon: p.battlesWon || 0,
+            battlesLost: p.battlesLost || 0,
+            battlesFled: p.battlesFled || 0,
+            buildingCount: CITY_IDS.reduce((sum, cid) => sum + (this.state.cities[cid].playerBuildings?.length || 0), 0),
+            citiesWithKontor: CITY_IDS.filter(cid => (this.state.cities[cid].playerBuildings || []).some(b => b.type === 'kontor')).length,
+            wealthHistory: p.wealthHistory || [],
+            difficulty: this.state.difficulty
+        };
+    },
+
     // Return to title
     returnToTitle() {
         this.running = false;
         this.state = null;
-        Sound.stopAll();
+        Sound.stopAmbient();
         document.getElementById('game-screen').classList.remove('active');
         document.getElementById('title-screen').classList.add('active');
-        TitleCanvas.start();
+        if (typeof Intro !== 'undefined') Intro.startTitle();
     }
 };

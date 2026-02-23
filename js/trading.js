@@ -52,8 +52,17 @@ const Trading = {
     },
 
     // Update market prices based on supply/demand
-    updateMarket(cityState, difficultyMod) {
+    // Seasonal price modifiers
+    SEASON_MODS: {
+        spring: { grain: 0.9, fish: 1.0, wood: 0.95, iron: 1.0, cloth: 1.0, fur: 1.1, beer: 1.0, salt: 1.0, spices: 1.0, wine: 1.0 },
+        summer: { grain: 0.85, fish: 0.9, wood: 0.9, iron: 1.0, cloth: 0.95, fur: 1.2, beer: 0.9, salt: 0.95, spices: 0.95, wine: 0.9 },
+        autumn: { grain: 0.75, fish: 0.95, wood: 1.0, iron: 1.05, cloth: 1.05, fur: 0.85, beer: 0.95, salt: 1.05, spices: 1.1, wine: 1.05 },
+        winter: { grain: 1.3, fish: 1.2, wood: 1.25, iron: 1.1, cloth: 1.1, fur: 0.8, beer: 1.1, salt: 1.2, spices: 1.15, wine: 1.2 }
+    },
+
+    updateMarket(cityState, difficultyMod, season) {
         const market = cityState.market;
+        const seasonMods = season ? (this.SEASON_MODS[season] || {}) : {};
 
         GOOD_IDS.forEach(goodId => {
             const m = market[goodId];
@@ -92,6 +101,10 @@ const Trading = {
             priceFactor += Utils.rand(-CONFIG.PRICE_VOLATILITY, CONFIG.PRICE_VOLATILITY);
             priceFactor *= (difficultyMod || 1.0);
 
+            // Apply seasonal modifier
+            const sMod = seasonMods[goodId] || 1.0;
+            priceFactor *= sMod;
+
             const newPrice = Math.round(good.basePrice * Utils.clamp(priceFactor, 0.3, 3.5));
 
             // Track trend
@@ -120,18 +133,14 @@ const Trading = {
         const market = cityState.market[goodId];
         const player = gameState.player;
 
-        // Apply reputation price discount (buy cheaper)
-        const discount = Reputation.getPriceDiscount(gameState);
-        const effectivePrice = Math.max(1, Math.round(market.price * (1 - discount)));
-
-        const maxAffordable = Math.floor(player.gold / effectivePrice);
+        const maxAffordable = Math.floor(player.gold / market.price);
         const maxStock = Math.floor(market.stock);
         const maxCapacity = getRemainingCapacity(ship);
         const actual = Math.min(amount, maxAffordable, maxStock, maxCapacity);
 
         if (actual <= 0) return { success: false, message: 'Kauf nicht moeglich.' };
 
-        const cost = actual * effectivePrice;
+        const cost = actual * market.price;
         player.gold -= cost;
         market.stock -= actual;
         market.totalBought += actual;
@@ -139,9 +148,6 @@ const Trading = {
 
         market.stock = Math.max(0, market.stock);
         player.totalTraded += cost;
-
-        // Reputation gain for trade
-        Reputation.onTrade(gameState, cost);
 
         return {
             success: true,
@@ -162,19 +168,12 @@ const Trading = {
 
         if (actual <= 0) return { success: false, message: 'Verkauf nicht moeglich.' };
 
-        // Apply reputation price bonus (sell higher)
-        const discount = Reputation.getPriceDiscount(gameState);
-        const effectivePrice = Math.round(market.price * (1 + discount));
-
-        const revenue = actual * effectivePrice;
+        const revenue = actual * market.price;
         player.gold += revenue;
         market.stock += actual;
         market.totalSold += actual;
         removeCargo(ship, goodId, actual);
         player.totalTraded += revenue;
-
-        // Reputation gain for trade
-        Reputation.onTrade(gameState, revenue);
 
         return {
             success: true,
@@ -208,6 +207,69 @@ const Trading = {
         }));
 
         return trades.sort((a, b) => b.profitPercent - a.profitPercent);
+    },
+
+    // === AUTO-TRADE ===
+
+    // Execute auto-trade logic when ship arrives at a destination
+    processAutoTrade(gameState, ship) {
+        if (!ship.autoTrade || ship.status !== 'docked' || !ship.location) return;
+
+        const at = ship.autoTrade;
+        const cityId = ship.location;
+        const otherCity = cityId === at.cityA ? at.cityB : at.cityA;
+
+        // Step 1: Sell all cargo (except goods we want to buy for return trip)
+        const cargoEntries = Object.entries(ship.cargo).filter(([, v]) => v > 0);
+        let totalRevenue = 0;
+        cargoEntries.forEach(([goodId, amount]) => {
+            const result = this.sell(gameState, cityId, goodId, amount, ship);
+            if (result.success) totalRevenue += result.revenue;
+        });
+
+        // Step 2: Buy profitable goods for destination
+        const trades = this.findBestTrades(gameState, cityId, otherCity);
+        const profitableTrades = trades.filter(t =>
+            t.profitPercent >= (at.minProfit || 10) && t.stock >= 3
+        );
+
+        let totalSpent = 0;
+        const maxSpend = at.maxSpend || (gameState.player.gold * 0.5);
+
+        profitableTrades.forEach(trade => {
+            if (totalSpent >= maxSpend) return;
+            const remaining = getRemainingCapacity(ship);
+            if (remaining <= 0) return;
+
+            const maxBuyable = Math.min(
+                remaining,
+                Math.floor(trade.stock * 0.6), // Don't drain market
+                Math.floor((maxSpend - totalSpent) / trade.buyPrice)
+            );
+
+            if (maxBuyable >= 1) {
+                const result = this.buy(gameState, cityId, trade.goodId, maxBuyable, ship);
+                if (result.success) totalSpent += result.cost;
+            }
+        });
+
+        // Step 3: Sail to other city
+        const route = findShortestPath(cityId, otherCity);
+        if (route) {
+            ship.route = route.path;
+            ship.routeIndex = 0;
+            ship.progress = 0;
+            ship.status = 'sailing';
+            ship.destination = otherCity;
+            ship.location = null;
+
+            if (totalRevenue > 0 || totalSpent > 0) {
+                UI.addLogMessage(
+                    `${ship.name} (Auto): Verkauf ${Utils.formatGold(totalRevenue)}, Einkauf ${Utils.formatGold(totalSpent)} → ${CITIES_DATA[otherCity].displayName}`,
+                    'trade'
+                );
+            }
+        }
     },
 
     // Draw price history mini-chart (canvas-based for inline use)

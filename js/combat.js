@@ -1,635 +1,389 @@
 /* ============================================
-   HANSE - Pirate Encounter & Naval Combat System
+   HANSE - Combat System
+   Interactive ship-to-ship combat with
+   tactical choices and round-based resolution
    ============================================ */
-
-// Pirate fleet templates with increasing difficulty
-const PIRATE_TYPES = [
-    {
-        id: 'scouts',
-        name: 'Piratenspaeher',
-        icon: '\u2694\uFE0F',
-        description: 'Eine kleine Piratenschaluppe auf Beutezug',
-        hull: 25,
-        maxHull: 25,
-        cannons: 1,
-        crew: 10,
-        speed: 4,
-        aggression: 0.4,
-        minGold: 30,
-        maxGold: 120,
-        fleeThreshold: 0.6
-    },
-    {
-        id: 'raiders',
-        name: 'Kaperbande',
-        icon: '\uD83C\uDFF4\u200D\u2620\uFE0F',
-        description: 'Erfahrene Piraten in einer bewaffneten Kogge',
-        hull: 45,
-        maxHull: 45,
-        cannons: 3,
-        crew: 20,
-        speed: 3,
-        aggression: 0.6,
-        minGold: 80,
-        maxGold: 300,
-        fleeThreshold: 0.4
-    },
-    {
-        id: 'warband',
-        name: 'Piratenflotte',
-        icon: '\uD83D\uDDE1\uFE0F',
-        description: 'Mehrere schwer bewaffnete Piratenschiffe',
-        hull: 70,
-        maxHull: 70,
-        cannons: 6,
-        crew: 35,
-        speed: 2.5,
-        aggression: 0.8,
-        minGold: 200,
-        maxGold: 600,
-        fleeThreshold: 0.25
-    },
-    {
-        id: 'dread',
-        name: 'Schwarze Flotte',
-        icon: '\u2620\uFE0F',
-        description: 'Die gefuerchtete Schwarze Flotte - Schrecken der Ostsee!',
-        hull: 100,
-        maxHull: 100,
-        cannons: 10,
-        crew: 50,
-        speed: 3,
-        aggression: 0.95,
-        minGold: 400,
-        maxGold: 1000,
-        fleeThreshold: 0.15
-    }
-];
-
-// Pirate captain names for flavor
-const PIRATE_NAMES = [
-    'Klaus Stoertebeker', 'Gödeke Michels', 'Hennig Wichmann',
-    'Magister Wigbold', 'Nikolaus Mansen', 'Marquard Pansen',
-    'Heino Wansen', 'Johann Stortebeker', 'Keno tom Bansen',
-    'Erich der Rote', 'Sven Schwarzbart', 'Dietrich Freibeuter'
-];
 
 const Combat = {
     active: false,
     state: null,
 
-    // Generate a pirate encounter for a ship
-    generateEncounter(ship, gameState) {
-        // Select pirate type based on player rank and ship value
-        const rankIndex = Reputation.getRankIndex(gameState);
-        const shipValue = SHIP_TYPES[ship.typeId].cost;
-
-        // Higher ranks and more valuable ships attract stronger pirates
-        let tierWeights;
-        if (rankIndex <= 1) {
-            tierWeights = [0.7, 0.25, 0.05, 0];
-        } else if (rankIndex <= 3) {
-            tierWeights = [0.3, 0.4, 0.25, 0.05];
-        } else {
-            tierWeights = [0.1, 0.25, 0.4, 0.25];
+    // Start a combat encounter
+    initCombat(playerShip, enemyType, nearCity) {
+        // Check for convoy — combine forces
+        let convoyShips = [];
+        if (playerShip.convoyId && Game.state && Game.state.player) {
+            convoyShips = Convoy.getShips(Game.state.player.ships, playerShip.convoyId)
+                .filter(s => s.id !== playerShip.id && s.status === 'sailing');
         }
 
-        // Ship value modifier - big ships attract bigger pirates
-        if (shipValue >= 12000) {
-            tierWeights[3] += 0.15;
-            tierWeights[0] -= 0.1;
-        }
+        // Effective combat stats include convoy ships
+        const totalCannons = playerShip.cannons + convoyShips.reduce((s, c) => s + c.cannons, 0);
+        const totalCrew = playerShip.crew + convoyShips.reduce((s, c) => s + c.crew, 0);
 
-        // Difficulty modifier
-        const diffMod = CONFIG.DIFFICULTY[gameState.difficulty].eventChance;
-        if (diffMod > 1) {
-            tierWeights[2] += 0.1;
-            tierWeights[3] += 0.05;
-        }
+        const enemy = this._generateEnemy(enemyType, { ...playerShip, cannons: totalCannons });
 
-        // Normalize weights
-        const totalWeight = tierWeights.reduce((a, b) => a + b, 0);
-        const roll = Math.random() * totalWeight;
-        let cumulative = 0;
-        let selectedTier = 0;
-        for (let i = 0; i < tierWeights.length; i++) {
-            cumulative += tierWeights[i];
-            if (roll <= cumulative) {
-                selectedTier = i;
-                break;
-            }
-        }
-
-        const pirateTemplate = PIRATE_TYPES[selectedTier];
-        const pirateName = Utils.pick(PIRATE_NAMES);
-
-        // Scale pirate stats slightly with randomness
-        const scaleFactor = Utils.rand(0.85, 1.15);
-
-        return {
-            pirate: {
-                ...pirateTemplate,
-                hull: Math.round(pirateTemplate.hull * scaleFactor),
-                maxHull: Math.round(pirateTemplate.maxHull * scaleFactor),
-                cannons: Math.max(1, Math.round(pirateTemplate.cannons * scaleFactor)),
-                crew: Math.max(5, Math.round(pirateTemplate.crew * scaleFactor)),
-                captainName: pirateName,
-                bounty: Utils.randInt(pirateTemplate.minGold, pirateTemplate.maxGold)
-            },
-            ship: ship,
+        this.state = {
+            playerShip,
+            enemy,
+            nearCity,
             round: 0,
             log: [],
-            playerFired: false,
-            resolved: false,
-            outcome: null // 'victory', 'defeat', 'fled', 'surrendered'
+            phase: 'choice',   // choice, fighting, resolved
+            result: null,       // victory, defeat, fled, ransomed
+            loot: null,
+            convoyShips,
+            effectiveCannons: totalCannons,
+            effectiveCrew: totalCrew
         };
-    },
 
-    // Start a combat encounter - pauses game and shows combat UI
-    startCombat(ship, gameState) {
-        const encounter = this.generateEncounter(ship, gameState);
         this.active = true;
-        this.state = encounter;
-
-        // Pause the game during combat
-        Game.paused = true;
-
-        // Show the combat modal
-        this.renderCombatUI(gameState);
-
-        // Play combat start sound
-        Sound.play('combat_start');
+        this._addLog(`${enemy.name} greift ${playerShip.name} nahe ${CITIES_DATA[nearCity]?.displayName || 'der Küste'} an!`, 'danger');
+        this._showCombatUI();
     },
 
-    // Calculate damage from an attack
-    calculateDamage(attackerCannons, attackerCrew, defenderHull) {
-        // Base damage from cannons
-        let damage = 0;
-        for (let i = 0; i < attackerCannons; i++) {
-            if (Math.random() < 0.65) { // 65% hit chance per cannon
-                damage += Utils.randInt(3, 8);
+    _generateEnemy(type, playerShip) {
+        const templates = {
+            pirate_small: {
+                name: 'Piratenkutter',
+                hull: 25, maxHull: 25,
+                cannons: 2, crew: 12, speed: 4,
+                lootGold: [50, 200], icon: '🏴‍☠️'
+            },
+            pirate: {
+                name: 'Piratenkogge',
+                hull: 45, maxHull: 45,
+                cannons: 6, crew: 25, speed: 3,
+                lootGold: [100, 500], icon: '🏴‍☠️'
+            },
+            pirate_large: {
+                name: 'Piratengaleone',
+                hull: 80, maxHull: 80,
+                cannons: 12, crew: 50, speed: 2,
+                lootGold: [300, 1000], icon: '🏴‍☠️'
             }
-        }
+        };
 
-        // Crew boarding bonus (small)
-        if (attackerCrew > 15 && Math.random() < 0.3) {
-            damage += Utils.randInt(2, 5);
-        }
-
-        return Math.max(1, damage);
-    },
-
-    // Player fires cannons
-    doFireCannons(gameState) {
-        if (!this.active || !this.state || this.state.resolved) return;
-
-        const combat = this.state;
-        const ship = combat.ship;
-        const pirate = combat.pirate;
-
-        combat.round++;
-
-        // Player attacks
-        const playerDamage = this.calculateDamage(ship.cannons, ship.crew, pirate.hull);
-        pirate.hull = Math.max(0, pirate.hull - playerDamage);
-
-        combat.log.push({
-            type: 'player_attack',
-            text: `${ship.name} feuert! ${playerDamage} Schaden an den Piraten.`
-        });
-
-        // Check if pirates are defeated
-        if (pirate.hull <= 0) {
-            this.resolveVictory(gameState);
-            this.renderCombatUI(gameState);
-            return;
-        }
-
-        // Pirates may flee if badly damaged
-        if (pirate.hull / pirate.maxHull < pirate.fleeThreshold && Math.random() < 0.5) {
-            combat.log.push({
-                type: 'pirate_flee',
-                text: 'Die Piraten ziehen sich zurueck! Sie haben genug!'
-            });
-            this.resolveVictory(gameState);
-            this.renderCombatUI(gameState);
-            return;
-        }
-
-        // Pirates counterattack
-        const pirateDamage = this.calculateDamage(pirate.cannons, pirate.crew, ship.hull);
-        ship.hull = Math.max(1, ship.hull - pirateDamage);
-
-        combat.log.push({
-            type: 'pirate_attack',
-            text: `Piraten feuern zurueck! ${pirateDamage} Schaden an ${ship.name}.`
-        });
-
-        if (ship.hull < ship.maxHull * 0.3) {
-            ship.damaged = true;
-        }
-
-        // Check if player ship is critically damaged
-        if (ship.hull <= 1) {
-            this.resolveDefeat(gameState);
-            this.renderCombatUI(gameState);
-            return;
-        }
-
-        Sound.play('combat_cannon');
-        this.renderCombatUI(gameState);
-    },
-
-    // Player attempts to flee
-    doFlee(gameState) {
-        if (!this.active || !this.state || this.state.resolved) return;
-
-        const combat = this.state;
-        const ship = combat.ship;
-        const pirate = combat.pirate;
-
-        combat.round++;
-
-        // Flee chance based on ship speed vs pirate speed, hull condition
-        const speedRatio = ship.speed / pirate.speed;
-        const hullFactor = ship.hull / ship.maxHull;
-        let fleeChance = 0.3 + (speedRatio - 1) * 0.3 + hullFactor * 0.1;
-
-        // Wind bonus
-        fleeChance += Utils.rand(-0.05, 0.1);
-
-        // Caravel gets a flee bonus (fast ship)
-        if (ship.typeId === 'caravel') fleeChance += 0.15;
-
-        fleeChance = Utils.clamp(fleeChance, 0.1, 0.85);
-
-        if (Math.random() < fleeChance) {
-            combat.log.push({
-                type: 'flee_success',
-                text: `${ship.name} entkommt den Piraten!`
-            });
-            combat.resolved = true;
-            combat.outcome = 'fled';
-            Sound.play('sail');
+        // Scale enemy to player ship strength
+        let template;
+        if (playerShip.cannons >= 8) {
+            template = templates.pirate_large;
+        } else if (playerShip.cannons >= 4) {
+            template = templates.pirate;
         } else {
-            combat.log.push({
-                type: 'flee_fail',
-                text: 'Fluchtversuch fehlgeschlagen! Die Piraten holen auf!'
-            });
-
-            // Pirates get a free attack on a failed flee
-            const pirateDamage = this.calculateDamage(
-                Math.ceil(pirate.cannons * 0.7), pirate.crew, ship.hull
-            );
-            ship.hull = Math.max(1, ship.hull - pirateDamage);
-
-            combat.log.push({
-                type: 'pirate_attack',
-                text: `Piraten nutzen die Gelegenheit! ${pirateDamage} Schaden an ${ship.name}.`
-            });
-
-            if (ship.hull < ship.maxHull * 0.3) {
-                ship.damaged = true;
-            }
-
-            if (ship.hull <= 1) {
-                this.resolveDefeat(gameState);
-            }
-
-            Sound.play('combat_cannon');
+            template = Math.random() < 0.6 ? templates.pirate_small : templates.pirate;
         }
 
-        this.renderCombatUI(gameState);
+        return { ...template };
     },
 
-    // Player surrenders and pays tribute
-    doSurrender(gameState) {
-        if (!this.active || !this.state || this.state.resolved) return;
+    // Player chooses action
+    chooseAction(action) {
+        if (!this.active || this.state.phase === 'resolved') return;
 
-        const combat = this.state;
-        const ship = combat.ship;
-        const pirate = combat.pirate;
+        switch (action) {
+            case 'fight':
+                this.state.phase = 'fighting';
+                this._fight();
+                break;
+            case 'flee':
+                this._flee();
+                break;
+            case 'ransom':
+                this._ransom();
+                break;
+        }
+    },
 
-        combat.resolved = true;
-        combat.outcome = 'surrendered';
+    _fight() {
+        const { playerShip, enemy, effectiveCannons, effectiveCrew } = this.state;
+        this.state.round++;
 
-        // Pirates take gold
-        const goldDemand = Math.min(
-            Utils.randInt(pirate.bounty * 0.3, pirate.bounty * 0.8),
-            Math.floor(gameState.player.gold * 0.3)
-        );
-        const goldTaken = Math.min(goldDemand, gameState.player.gold);
-        gameState.player.gold -= goldTaken;
+        Sound.play('cannon');
 
-        combat.log.push({
-            type: 'surrender',
-            text: `Ihr uebergebt ${Utils.formatGold(goldTaken)} an die Piraten.`
-        });
+        // Player fires (using convoy-combined stats)
+        const playerDmg = this._calcDamage(effectiveCannons || playerShip.cannons, effectiveCrew || playerShip.crew);
+        enemy.hull -= playerDmg;
+        this._addLog(`${playerShip.name} feuert! ${playerDmg} Schaden am Feind.`, 'info');
 
-        // Pirates take some cargo (30-50%)
-        const cargoLost = [];
-        const goodIds = Object.keys(ship.cargo);
-        goodIds.forEach(goodId => {
-            if (Math.random() < pirate.aggression) {
-                const lostAmt = Math.floor(ship.cargo[goodId] * Utils.rand(0.2, 0.5));
-                if (lostAmt > 0) {
-                    removeCargo(ship, goodId, lostAmt);
-                    cargoLost.push(`${lostAmt} ${GOODS[goodId].name}`);
-                }
-            }
-        });
-
-        if (cargoLost.length > 0) {
-            combat.log.push({
-                type: 'cargo_lost',
-                text: `Fracht geplundert: ${cargoLost.join(', ')}`
-            });
+        // Check enemy sunk
+        if (enemy.hull <= 0) {
+            enemy.hull = 0;
+            this._victory();
+            return;
         }
 
-        // Reputation loss for surrendering
-        Reputation.addRep(gameState, -15, 'Piraten Tribut gezahlt');
+        // Enemy fires back
+        setTimeout(() => Sound.play('hit'), 400);
+        const enemyDmg = this._calcDamage(enemy.cannons, enemy.crew);
+        playerShip.hull -= enemyDmg;
+        this._addLog(`${enemy.name} feuert zurück! ${enemyDmg} Schaden an ${playerShip.name}.`, 'danger');
 
-        Sound.play('danger');
-        this.renderCombatUI(gameState);
+        // Crew casualties (small chance)
+        if (Math.random() < 0.2) {
+            const crewLoss = Utils.randInt(1, 3);
+            enemy.crew = Math.max(1, enemy.crew - crewLoss);
+        }
+
+        // Check player sunk
+        if (playerShip.hull <= 0) {
+            playerShip.hull = 1; // Don't actually sink, but heavy damage
+            this._defeat();
+            return;
+        }
+
+        if (playerShip.hull < playerShip.maxHull * 0.3) {
+            playerShip.damaged = true;
+        }
+
+        // Still fighting — show updated UI
+        this.state.phase = 'choice';
+        this._showCombatUI();
     },
 
-    // Resolve a victory
-    resolveVictory(gameState) {
-        const combat = this.state;
-        const pirate = combat.pirate;
+    _flee() {
+        Sound.play('flee');
+        const { playerShip, enemy } = this.state;
+        const fleeChance = 0.3 + (playerShip.speed - enemy.speed + 2) * 0.1;
 
-        combat.resolved = true;
-        combat.outcome = 'victory';
+        if (Math.random() < Utils.clamp(fleeChance, 0.15, 0.85)) {
+            this._addLog(`${playerShip.name} entkommt dem ${enemy.name}!`, 'info');
+            // Take a parting shot
+            const partingDmg = Math.floor(this._calcDamage(enemy.cannons, enemy.crew) * 0.5);
+            if (partingDmg > 0) {
+                playerShip.hull -= partingDmg;
+                this._addLog(`Abschiedsschuss! ${partingDmg} Schaden beim Fliehen.`, 'danger');
+            }
+            this.state.result = 'fled';
+            this.state.phase = 'resolved';
+            if (Game.state?.player) Game.state.player.battlesFled = (Game.state.player.battlesFled || 0) + 1;
+        } else {
+            this._addLog('Flucht gescheitert! Der Feind ist zu schnell!', 'danger');
+            // Enemy gets a free shot
+            const freeDmg = this._calcDamage(enemy.cannons, enemy.crew);
+            playerShip.hull -= freeDmg;
+            this._addLog(`${enemy.name} nutzt die Gelegenheit! ${freeDmg} Schaden.`, 'danger');
 
-        // Gold reward
-        const goldReward = pirate.bounty;
-        gameState.player.gold += goldReward;
+            if (playerShip.hull <= 0) {
+                playerShip.hull = 1;
+                this._defeat();
+                return;
+            }
+            this.state.phase = 'choice';
+        }
 
-        combat.log.push({
-            type: 'victory',
-            text: `Sieg! Ihr erbeutet ${Utils.formatGold(goldReward)} von den Piraten!`
-        });
+        if (playerShip.hull < playerShip.maxHull * 0.3) {
+            playerShip.damaged = true;
+        }
+        this._showCombatUI();
+    },
 
-        // Chance to capture pirate goods
-        const lootChance = 0.4 + (pirate.maxHull > 50 ? 0.2 : 0);
-        if (Math.random() < lootChance) {
-            const lootGood = Utils.pick(GOOD_IDS);
-            const lootAmt = Utils.randInt(3, Math.floor(pirate.crew / 2));
-            const added = addCargo(combat.ship, lootGood, lootAmt);
+    _ransom() {
+        const { playerShip, enemy } = this.state;
+        const ransomCost = Utils.randInt(100, 500) + enemy.cannons * 20;
+
+        if (Game.state.player.gold >= ransomCost) {
+            Game.state.player.gold -= ransomCost;
+            Sound.play('coins');
+            this._addLog(`Ihr zahlt ${Utils.formatGold(ransomCost)} Lösegeld. ${enemy.name} zieht ab.`, 'warning');
+            this.state.result = 'ransomed';
+        } else {
+            this._addLog(`Nicht genug Gold für Lösegeld! (${Utils.formatGold(ransomCost)} benötigt)`, 'danger');
+            this._addLog('Die Piraten greifen wütend an!', 'danger');
+            // Forced combat round
+            this.state.phase = 'fighting';
+            this._fight();
+            return;
+        }
+
+        this.state.phase = 'resolved';
+        this._showCombatUI();
+    },
+
+    _victory() {
+        const { playerShip, enemy } = this.state;
+        const lootGold = Utils.randInt(enemy.lootGold[0], enemy.lootGold[1]);
+        Game.state.player.gold += lootGold;
+
+        this.state.loot = { gold: lootGold, goods: [] };
+
+        // Chance to recover goods
+        if (Math.random() < 0.4) {
+            const possibleGoods = ['iron', 'cloth', 'spices', 'wine'];
+            const lootGood = Utils.pick(possibleGoods);
+            const lootAmt = Utils.randInt(3, 15);
+            const added = addCargo(playerShip, lootGood, lootAmt);
             if (added > 0) {
-                combat.log.push({
-                    type: 'loot',
-                    text: `Beute gefunden: ${added} ${GOODS[lootGood].name}!`
-                });
+                this.state.loot.goods.push({ id: lootGood, amount: added });
             }
         }
 
-        // Reputation gain for defeating pirates
-        const repGain = 10 + PIRATE_TYPES.findIndex(p => p.id === pirate.id) * 15;
-        Reputation.addRep(gameState, repGain, `${pirate.name} besiegt`);
-
-        Sound.play('combat_victory');
-    },
-
-    // Resolve a defeat
-    resolveDefeat(gameState) {
-        const combat = this.state;
-        const ship = combat.ship;
-        const pirate = combat.pirate;
-
-        combat.resolved = true;
-        combat.outcome = 'defeat';
-
-        // Take significant gold
-        const goldLoss = Math.min(
-            Utils.randInt(pirate.bounty * 0.5, pirate.bounty),
-            gameState.player.gold
-        );
-        gameState.player.gold -= goldLoss;
-
-        combat.log.push({
-            type: 'defeat',
-            text: `Niederlage! Die Piraten nehmen ${Utils.formatGold(goldLoss)}.`
-        });
-
-        // Lose most cargo
-        const cargoLost = [];
-        Object.keys(ship.cargo).forEach(goodId => {
-            const lostAmt = Math.floor(ship.cargo[goodId] * Utils.rand(0.5, 0.8));
-            if (lostAmt > 0) {
-                removeCargo(ship, goodId, lostAmt);
-                cargoLost.push(`${lostAmt} ${GOODS[goodId].name}`);
-            }
-        });
-
-        if (cargoLost.length > 0) {
-            combat.log.push({
-                type: 'cargo_lost',
-                text: `Fracht geplundert: ${cargoLost.join(', ')}`
+        Sound.play('victory');
+        if (Game.state?.player) Game.state.player.battlesWon = (Game.state.player.battlesWon || 0) + 1;
+        this._addLog(`SIEG! ${enemy.name} versenkt!`, 'success');
+        this._addLog(`Beute: ${Utils.formatGold(lootGold)}`, 'success');
+        if (this.state.loot.goods.length > 0) {
+            this.state.loot.goods.forEach(g => {
+                this._addLog(`Erbeutet: ${g.amount} ${GOODS[g.id].name}`, 'success');
             });
         }
 
-        // Ensure ship is damaged
-        ship.hull = Math.max(1, Math.floor(ship.maxHull * 0.1));
-        ship.damaged = true;
-
-        // Reputation loss
-        Reputation.addRep(gameState, -25, 'Kampf gegen Piraten verloren');
-
-        Sound.play('danger');
-    },
-
-    // End combat and return to game
-    endCombat(gameState) {
-        if (!this.active) return;
-
-        const combat = this.state;
-
-        // Log the outcome to the game message log
-        let summaryMsg;
-        switch (combat.outcome) {
-            case 'victory':
-                summaryMsg = `${combat.ship.name} hat ${combat.pirate.captainName}s ${combat.pirate.name} besiegt!`;
-                break;
-            case 'fled':
-                summaryMsg = `${combat.ship.name} ist den Piraten entkommen.`;
-                break;
-            case 'surrendered':
-                summaryMsg = `${combat.ship.name} hat den Piraten Tribut gezahlt.`;
-                break;
-            case 'defeat':
-                summaryMsg = `${combat.ship.name} wurde von ${combat.pirate.captainName}s ${combat.pirate.name} ueberwaltigt!`;
-                break;
+        // Reputation boost
+        const nearCity = this.state.nearCity;
+        if (nearCity && Game.state.cities[nearCity]) {
+            Game.state.cities[nearCity].reputation = (Game.state.cities[nearCity].reputation || 0) + 3;
+            Game.state.player.reputation[nearCity] = (Game.state.player.reputation[nearCity] || 0) + 3;
         }
 
-        UI.addLogMessage(summaryMsg, combat.outcome === 'victory' ? 'trade' : 'danger');
-
-        this.active = false;
-        this.state = null;
-
-        // Unpause the game
-        Game.paused = false;
-
-        // Hide the modal
-        UI.hideModal();
-
-        // Refresh UI
-        UI.updateTopBar(gameState);
-        UI.refreshCurrentTab();
+        this.state.result = 'victory';
+        this.state.phase = 'resolved';
+        this._showCombatUI();
     },
 
-    // Render the combat UI in the modal
-    renderCombatUI(gameState) {
-        const combat = this.state;
-        const ship = combat.ship;
-        const pirate = combat.pirate;
+    _defeat() {
+        const { playerShip, enemy } = this.state;
 
-        const shipHullPct = Math.round(ship.hull / ship.maxHull * 100);
-        const pirateHullPct = Math.round(pirate.hull / pirate.maxHull * 100);
-        const shipHullColor = shipHullPct > 50 ? 'var(--success)' : (shipHullPct > 25 ? 'var(--warning)' : 'var(--danger)');
-        const pirateHullColor = pirateHullPct > 50 ? 'var(--success)' : (pirateHullPct > 25 ? 'var(--warning)' : 'var(--danger)');
+        // Lose cargo
+        const lostGoods = [];
+        const goodIds = Object.keys(playerShip.cargo);
+        goodIds.forEach(gid => {
+            const lostAmt = Math.floor(playerShip.cargo[gid] * Utils.rand(0.3, 0.7));
+            if (lostAmt > 0) {
+                removeCargo(playerShip, gid, lostAmt);
+                lostGoods.push(`${lostAmt} ${GOODS[gid].name}`);
+            }
+        });
 
-        let html = '<div class="combat-modal">';
+        // Lose gold
+        const lostGold = Math.floor(Game.state.player.gold * Utils.rand(0.05, 0.15));
+        Game.state.player.gold -= lostGold;
 
-        // Header
-        html += `<div class="combat-header">
-            <div class="combat-icon">${pirate.icon}</div>
-            <h3 class="combat-title">${pirate.name}!</h3>
-            <div class="combat-desc">${pirate.description}</div>
-            <div class="combat-captain">Kapitaen: <strong>${pirate.captainName}</strong></div>
-        </div>`;
+        Sound.play('defeat');
+        if (Game.state?.player) Game.state.player.battlesLost = (Game.state.player.battlesLost || 0) + 1;
+        this._addLog('NIEDERLAGE! Die Piraten plündern euer Schiff!', 'danger');
+        if (lostGold > 0) this._addLog(`${Utils.formatGold(lostGold)} Gold gestohlen!`, 'danger');
+        if (lostGoods.length > 0) this._addLog(`Verloren: ${lostGoods.join(', ')}`, 'danger');
+
+        playerShip.hull = Math.max(1, playerShip.hull);
+        playerShip.damaged = true;
+
+        this.state.result = 'defeat';
+        this.state.phase = 'resolved';
+        this._showCombatUI();
+    },
+
+    _calcDamage(cannons, crew) {
+        // Base damage from cannons with randomness
+        const baseDmg = cannons * Utils.rand(1.5, 3.5);
+        // Crew effectiveness bonus
+        const crewBonus = Math.min(crew * 0.1, 3);
+        // Lucky hit chance
+        const lucky = Math.random() < 0.1 ? 1.5 : 1;
+        return Math.max(1, Math.round((baseDmg + crewBonus) * lucky));
+    },
+
+    _addLog(text, type) {
+        this.state.log.push({ text, type: type || 'info' });
+    },
+
+    // === UI ===
+    _showCombatUI() {
+        const { playerShip, enemy, round, log, phase, result } = this.state;
+        const overlay = document.getElementById('modal-overlay');
+        const content = document.getElementById('modal-content');
+
+        const pHullPct = Math.max(0, playerShip.hull / playerShip.maxHull);
+        const eHullPct = Math.max(0, enemy.hull / enemy.maxHull);
+        const pHullColor = pHullPct > 0.5 ? '#2eac68' : (pHullPct > 0.25 ? '#e8a020' : '#d94040');
+        const eHullColor = eHullPct > 0.5 ? '#2eac68' : (eHullPct > 0.25 ? '#e8a020' : '#d94040');
+
+        let html = `<div class="combat-ui">`;
+        html += `<h3>${enemy.icon} Seekampf! — Runde ${round}</h3>`;
 
         // Ship comparison
-        html += '<div class="combat-ships">';
+        html += `<div class="combat-ships">`;
 
         // Player ship
-        html += `<div class="combat-ship-card player">
-            <div class="combat-ship-label">Euer Schiff</div>
-            <div class="combat-ship-name">${ship.name}</div>
-            <div class="combat-ship-type">${SHIP_TYPES[ship.typeId].name}</div>
-            <div class="combat-hull-bar">
-                <div class="combat-hull-fill" style="width:${shipHullPct}%;background:${shipHullColor}"></div>
-            </div>
-            <div class="combat-hull-text" style="color:${shipHullColor}">${ship.hull} / ${ship.maxHull}</div>
-            <div class="combat-ship-stats">
-                <span title="Kanonen">\uD83D\uDCA3 ${ship.cannons}</span>
-                <span title="Besatzung">\uD83D\uDC64 ${ship.crew}</span>
-                <span title="Geschwindigkeit">\uD83D\uDCA8 ${ship.speed}</span>
-            </div>
-        </div>`;
+        html += `<div class="combat-ship player-ship">`;
+        html += `<div class="combat-ship-name" style="color:#ffd700">⚓ ${playerShip.name}</div>`;
+        html += `<div class="combat-ship-type">${SHIP_TYPES[playerShip.typeId].name}</div>`;
+        html += `<div class="combat-bar"><div class="combat-bar-fill" style="width:${pHullPct*100}%;background:${pHullColor}"></div></div>`;
+        html += `<div class="combat-stats">`;
+        html += `<span>Rumpf: ${playerShip.hull}/${playerShip.maxHull}</span>`;
+        const eCannons = this.state.effectiveCannons || playerShip.cannons;
+        const eCrew = this.state.effectiveCrew || playerShip.crew;
+        const hasConvoy = this.state.convoyShips && this.state.convoyShips.length > 0;
+        html += `<span>Kanonen: ${eCannons}${hasConvoy ? ' ⚓' : ''}</span>`;
+        html += `<span>Crew: ${eCrew}</span>`;
+        if (hasConvoy) html += `<span style="color:var(--accent)">Konvoi: +${this.state.convoyShips.length}</span>`;
+        html += `</div></div>`;
 
-        // VS divider
-        html += '<div class="combat-vs">VS</div>';
+        // VS
+        html += `<div class="combat-vs">⚔️</div>`;
 
-        // Pirate ship
-        html += `<div class="combat-ship-card pirate">
-            <div class="combat-ship-label">Piraten</div>
-            <div class="combat-ship-name">${pirate.captainName}</div>
-            <div class="combat-ship-type">${pirate.name}</div>
-            <div class="combat-hull-bar">
-                <div class="combat-hull-fill" style="width:${pirateHullPct}%;background:${pirateHullColor}"></div>
-            </div>
-            <div class="combat-hull-text" style="color:${pirateHullColor}">${pirate.hull} / ${pirate.maxHull}</div>
-            <div class="combat-ship-stats">
-                <span title="Kanonen">\uD83D\uDCA3 ${pirate.cannons}</span>
-                <span title="Besatzung">\uD83D\uDC64 ${pirate.crew}</span>
-                <span title="Geschwindigkeit">\uD83D\uDCA8 ${pirate.speed}</span>
-            </div>
-        </div>`;
+        // Enemy ship
+        html += `<div class="combat-ship enemy-ship">`;
+        html += `<div class="combat-ship-name" style="color:#d94040">${enemy.icon} ${enemy.name}</div>`;
+        html += `<div class="combat-ship-type">Piratenschiff</div>`;
+        html += `<div class="combat-bar"><div class="combat-bar-fill" style="width:${eHullPct*100}%;background:${eHullColor}"></div></div>`;
+        html += `<div class="combat-stats">`;
+        html += `<span>Rumpf: ${Math.max(0, enemy.hull)}/${enemy.maxHull}</span>`;
+        html += `<span>Kanonen: ${enemy.cannons}</span>`;
+        html += `<span>Crew: ${enemy.crew}</span>`;
+        html += `</div></div>`;
 
-        html += '</div>'; // end combat-ships
+        html += `</div>`; // combat-ships
 
         // Combat log
-        html += '<div class="combat-log">';
-        if (combat.log.length === 0) {
-            html += `<div class="combat-log-entry encounter">Piraten voraus! ${pirate.captainName} greift ${ship.name} an!</div>`;
-        }
-        // Show last 6 log entries
-        const visibleLog = combat.log.slice(-6);
-        visibleLog.forEach(entry => {
-            let entryClass = '';
-            if (entry.type === 'player_attack') entryClass = 'player-action';
-            else if (entry.type === 'pirate_attack') entryClass = 'pirate-action';
-            else if (entry.type === 'victory' || entry.type === 'loot') entryClass = 'victory';
-            else if (entry.type === 'defeat' || entry.type === 'cargo_lost') entryClass = 'defeat';
-            else if (entry.type === 'flee_success' || entry.type === 'pirate_flee') entryClass = 'victory';
-            else if (entry.type === 'flee_fail') entryClass = 'pirate-action';
-            else if (entry.type === 'surrender') entryClass = 'defeat';
-            html += `<div class="combat-log-entry ${entryClass}">${entry.text}</div>`;
+        html += `<div class="combat-log">`;
+        const recentLogs = log.slice(-6);
+        recentLogs.forEach(entry => {
+            const color = entry.type === 'danger' ? '#d94040' :
+                          entry.type === 'success' ? '#2eac68' :
+                          entry.type === 'warning' ? '#e8a020' : '#8899aa';
+            html += `<div class="combat-log-entry" style="color:${color}">${entry.text}</div>`;
         });
-        html += '</div>';
+        html += `</div>`;
 
-        // Round indicator
-        if (!combat.resolved) {
-            html += `<div class="combat-round">Runde ${combat.round + 1}</div>`;
+        // Actions
+        html += `<div class="combat-actions">`;
+        if (phase === 'choice') {
+            html += `<button class="modal-btn primary" onclick="Combat.chooseAction('fight')">⚔️ Kämpfen</button>`;
+            html += `<button class="modal-btn secondary" onclick="Combat.chooseAction('flee')">🏃 Fliehen</button>`;
+            html += `<button class="modal-btn secondary" onclick="Combat.chooseAction('ransom')">💰 Lösegeld</button>`;
+        } else if (phase === 'resolved') {
+            const resultText = result === 'victory' ? '🏆 Sieg!' :
+                               result === 'defeat' ? '💀 Niederlage' :
+                               result === 'fled' ? '🏃 Entkommen' : '💰 Lösegeld gezahlt';
+            html += `<div class="combat-result">${resultText}</div>`;
+            html += `<button class="modal-btn primary" onclick="Combat.closeCombat()">Weiter</button>`;
+        }
+        html += `</div>`;
+
+        html += `</div>`; // combat-ui
+
+        content.innerHTML = html;
+        overlay.classList.remove('hidden');
+
+        // Pause game during combat
+        if (Game.speed > 0) {
+            this._savedSpeed = Game.speed;
+            Game.setSpeed(0);
+        }
+    },
+
+    closeCombat() {
+        this.active = false;
+        this.state = null;
+        document.getElementById('modal-overlay').classList.add('hidden');
+
+        // Resume game speed
+        if (this._savedSpeed) {
+            Game.setSpeed(this._savedSpeed);
+            this._savedSpeed = null;
         }
 
-        // Action buttons or result
-        if (combat.resolved) {
-            let resultClass, resultTitle, resultText;
-            switch (combat.outcome) {
-                case 'victory':
-                    resultClass = 'victory';
-                    resultTitle = 'Sieg!';
-                    resultText = 'Die Piraten sind besiegt! Die See ist wieder sicher.';
-                    break;
-                case 'fled':
-                    resultClass = 'fled';
-                    resultTitle = 'Entkommen!';
-                    resultText = 'Ihr seid den Piraten entkommen. Glueck gehabt!';
-                    break;
-                case 'surrendered':
-                    resultClass = 'surrendered';
-                    resultTitle = 'Uebergabe';
-                    resultText = 'Ihr habt den Piraten Tribut gezahlt um Euer Schiff zu retten.';
-                    break;
-                case 'defeat':
-                    resultClass = 'defeat';
-                    resultTitle = 'Niederlage!';
-                    resultText = 'Die Piraten haben Euch ueberwaltigt und Eure Waren geplundert.';
-                    break;
-            }
-
-            html += `<div class="combat-result ${resultClass}">
-                <div class="combat-result-title">${resultTitle}</div>
-                <div class="combat-result-text">${resultText}</div>
-            </div>`;
-
-            html += `<div class="modal-buttons">
-                <button class="modal-btn primary" onclick="Combat.endCombat(Game.state)">Weiter</button>
-            </div>`;
-        } else {
-            // Action buttons
-            html += '<div class="combat-actions">';
-
-            html += `<button class="combat-action-btn fire" onclick="Combat.doFireCannons(Game.state)" title="Feuert Eure Kanonen auf die Piraten">
-                <span class="combat-action-icon">\uD83D\uDCA5</span>
-                <span class="combat-action-label">Feuer!</span>
-                <span class="combat-action-desc">${ship.cannons} Kanonen</span>
-            </button>`;
-
-            const fleeEstimate = Math.round(Utils.clamp(
-                0.3 + (ship.speed / pirate.speed - 1) * 0.3 + (ship.hull / ship.maxHull) * 0.1,
-                0.1, 0.85
-            ) * 100);
-
-            html += `<button class="combat-action-btn flee" onclick="Combat.doFlee(Game.state)" title="Versucht den Piraten zu entkommen">
-                <span class="combat-action-icon">\uD83D\uDCA8</span>
-                <span class="combat-action-label">Fliehen</span>
-                <span class="combat-action-desc">~${fleeEstimate}% Chance</span>
-            </button>`;
-
-            html += `<button class="combat-action-btn surrender" onclick="Combat.doSurrender(Game.state)" title="Ergebt Euch und zahlt Tribut">
-                <span class="combat-action-icon">\uD83C\uDFF3\uFE0F</span>
-                <span class="combat-action-label">Ergeben</span>
-                <span class="combat-action-desc">Tribut zahlen</span>
-            </button>`;
-
-            html += '</div>';
-        }
-
-        html += '</div>'; // end combat-modal
-
-        UI.showModal(html);
+        UI.updateTopBar(Game.state);
+        UI.refreshCurrentTab();
     }
 };

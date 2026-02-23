@@ -41,12 +41,41 @@ const UI = {
         });
     },
 
+    // Mobile panel toggle
+    toggleMobilePanel(open) {
+        const panel = document.getElementById('side-panel');
+        if (open) {
+            panel.classList.add('mobile-open');
+        } else {
+            panel.classList.remove('mobile-open');
+        }
+    },
+
+    isMobile() {
+        return window.innerWidth <= 768;
+    },
+
+    // Panel background images per tab
+    panelBackgrounds: {
+        city: 'assets/ui/panel_stadt.png',
+        trade: 'assets/ui/panel_handel.png',
+        fleet: 'assets/ui/panel_flotte.png',
+        build: 'assets/ui/panel_bauen.png'
+    },
+
     switchTab(tabName) {
         this.currentTab = tabName;
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
         document.getElementById(`tab-${tabName}`).classList.add('active');
+
+        // Switch panel background image per tab
+        const panel = document.getElementById('side-panel');
+        if (panel && this.panelBackgrounds[tabName]) {
+            panel.style.backgroundImage = `url('${this.panelBackgrounds[tabName]}')`;
+        }
+
         this.refreshCurrentTab();
     },
 
@@ -56,33 +85,34 @@ const UI = {
             case 'trade': this.updateTradeTab(); break;
             case 'fleet': this.updateFleetTab(); break;
             case 'build': this.updateBuildTab(); break;
-            case 'quests': this.updateQuestsTab(); break;
-            case 'reputation': this.updateReputationTab(); break;
         }
     },
 
-    // Update top bar
+    // Update top bar + side panel banner
     updateTopBar(gameState) {
         document.getElementById('player-display').textContent = gameState.player.name;
+        document.getElementById('rank-display').textContent = gameState.player.rank;
         document.getElementById('date-display').textContent = Utils.formatDate(
             gameState.date.day, gameState.date.month, gameState.date.year
         );
         document.getElementById('gold-display').textContent = Utils.formatGold(gameState.player.gold);
 
-        // Reputation rank display with progress bar
-        const rank = Reputation.getRank(gameState);
-        const progress = Reputation.getProgressToNext(gameState);
-        const score = Reputation.getScore(gameState);
-        const nextRank = Reputation.getNextRank(gameState);
-        const progressPct = Math.round(progress * 100);
-
-        let rankHtml = `<span class="rank-icon">${rank.icon}</span>`;
-        rankHtml += `<span class="rank-name">${rank.displayName}</span>`;
-        rankHtml += `<span class="rank-rep-score">${Utils.formatNumber(score)}</span>`;
-        rankHtml += `<div class="rank-progress-mini" title="${nextRank ? `${Utils.formatNumber(score)} / ${Utils.formatNumber(nextRank.minRep)}` : 'Hoechster Rang!'}">`;
-        rankHtml += `<div class="rank-progress-mini-fill" style="width:${progressPct}%"></div></div>`;
-
-        document.getElementById('rank-display').innerHTML = rankHtml;
+        // Update side panel city banner
+        const cityId = GameMap.selectedCity;
+        const bannerName = document.getElementById('side-panel-city-name');
+        const bannerGold = document.getElementById('side-panel-city-gold');
+        if (bannerName) {
+            if (cityId && CITIES_DATA[cityId]) {
+                bannerName.textContent = CITIES_DATA[cityId].displayName;
+                const dockedShips = gameState.player.ships.filter(s => s.location === cityId);
+                bannerGold.textContent = dockedShips.length > 0
+                    ? `\u2693 ${dockedShips.length} Schiff${dockedShips.length > 1 ? 'e' : ''}`
+                    : '';
+            } else {
+                bannerName.textContent = 'Keine Stadt';
+                bannerGold.textContent = '';
+            }
+        }
     },
 
     // === CITY TAB ===
@@ -90,10 +120,8 @@ const UI = {
         GameMap.selectedCity = cityId;
         this.switchTab('city');
         this.updateCityTab();
-        // Port ambient sounds
-        if (typeof Sound !== 'undefined' && Sound.playPortAmbient) {
-            Sound.playPortAmbient();
-        }
+        if (Game.state) this.updateTopBar(Game.state); // refresh banner
+        if (this.isMobile()) this.toggleMobilePanel(true);
     },
 
     updateCityTab() {
@@ -147,10 +175,13 @@ const UI = {
             const vsBase = m.price - good.basePrice;
             const vsColor = vsBase > 5 ? 'var(--danger)' : (vsBase < -5 ? 'var(--success)' : 'var(--text-dim)');
 
-            html += `<div class="city-good-row" onclick="UI.showPriceDetail('${cityId}','${goodId}')" style="cursor:pointer" title="Klicken fuer Preishistorie">
+            // Highlight especially cheap or expensive goods
+            const dealClass = vsBase < -8 ? 'good-deal' : (vsBase > 8 ? 'bad-deal' : '');
+
+            html += `<div class="city-good-row ${dealClass}" onclick="UI.showPriceDetail('${cityId}','${goodId}')" style="cursor:pointer" title="Klicken fuer Preishistorie">
                 <span class="city-good-name">${good.icon} ${good.name}</span>
                 <span class="city-good-stock" title="Vorrat">${Math.floor(m.stock)}</span>
-                <span class="city-good-price">${m.price} G</span>
+                <span class="city-good-price" style="color:${vsColor}">${m.price} G</span>
                 <span class="city-good-trend ${trendClass}" title="${vsBase > 0 ? '+' : ''}${vsBase} vs. Basis">${trendIcon}</span>
             </div>`;
         });
@@ -250,12 +281,12 @@ const UI = {
             html += '</div>';
         }
 
-        // Ship summary with cargo bar
+        // Ship summary with cargo bar (at top for context)
         html += `<div class="trade-summary">
-            <div class="trade-summary-row"><span>Schiff:</span><span>${ship.name} (${SHIP_TYPES[ship.typeId].name})</span></div>
-            <div class="trade-summary-row"><span>Fracht:</span><span>${cargoCount} / ${ship.capacity}</span></div>
+            <div class="trade-summary-row"><span>\u2693 ${ship.name}</span><span style="color:var(--text-dim)">${SHIP_TYPES[ship.typeId].name}</span></div>
+            <div class="trade-summary-row"><span>Fracht:</span><span>${cargoCount} / ${ship.capacity} (${cargoPercent}%)</span></div>
             <div class="ship-cargo-bar" style="margin:4px 0"><div class="ship-cargo-fill" style="width:${cargoPercent}%"></div></div>
-            <div class="trade-summary-row"><span>Gold:</span><span style="color:var(--gold-color)">${Utils.formatGold(Game.state.player.gold)}</span></div>
+            <div class="trade-summary-row"><span>Verf\u00fcgbar:</span><span style="color:var(--gold-color);font-weight:bold">${Utils.formatGold(Game.state.player.gold)}</span></div>
         </div>`;
 
         // Goods list
@@ -463,17 +494,19 @@ const UI = {
                 <div class="ship-card-stats">
                     <div class="ship-stat"><span class="ship-stat-label">Rumpf:</span><span class="ship-stat-value" style="color:${hullPercent > 50 ? 'var(--text)' : (hullPercent > 25 ? 'var(--warning)' : 'var(--danger)')}">${hullPercent}%</span></div>
                     <div class="ship-stat"><span class="ship-stat-label">Fracht:</span><span class="ship-stat-value">${cargoCount}/${ship.capacity}</span></div>
-                    <div class="ship-stat"><span class="ship-stat-label">Geschw.:</span><span class="ship-stat-value">${ship.speed.toFixed(1)}</span></div>
+                    <div class="ship-stat"><span class="ship-stat-label">Crew:</span><span class="ship-stat-value">${ship.crew}/${ship.maxCrew || ship.crew}</span></div>
                     <div class="ship-stat"><span class="ship-stat-label">Kanonen:</span><span class="ship-stat-value">${ship.cannons}</span></div>
                 </div>
                 <div class="ship-cargo-bar"><div class="ship-cargo-fill" style="width:${cargoPercent}%"></div></div>
                 ${cargoText ? `<div style="font-size:10px;margin-top:4px;color:var(--text-dim)">${cargoText}</div>` : ''}
+                ${ship.convoyId ? `<div style="font-size:10px;color:var(--accent);margin-top:2px">⚓ Konvoi</div>` : ''}
                 <div class="ship-status ${statusClass}">${statusText}</div>
             </div>`;
 
             // Navigation options for selected docked ship
             if (this.selectedShipId === ship.id && ship.status === 'docked') {
                 html += this.renderNavigationOptions(ship);
+                html += this.renderConvoyOptions(ship);
             }
         });
 
@@ -507,6 +540,24 @@ const UI = {
             </div>`;
         }
 
+        // Crew management
+        html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            <button class="shipyard-buy-btn" style="width:100%;padding:4px" onclick="UI.showCrewManagement('${ship.id}')">👥 Crew verwalten (${ship.crew}/${ship.maxCrew || ship.crew})</button>
+        </div>`;
+
+        // Auto-Trade
+        html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">`;
+        if (ship.autoTrade) {
+            const atA = CITIES_DATA[ship.autoTrade.cityA]?.displayName || '?';
+            const atB = CITIES_DATA[ship.autoTrade.cityB]?.displayName || '?';
+            html += `<div style="font-size:11px;color:var(--accent);margin-bottom:4px">🔄 Auto-Handel aktiv</div>`;
+            html += `<div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">${atA} ↔ ${atB} (Min. ${ship.autoTrade.minProfit || 10}% Gewinn)</div>`;
+            html += `<button class="trade-btn sell" style="width:100%;padding:4px" onclick="UI.stopAutoTrade('${ship.id}')">⏹ Auto-Handel stoppen</button>`;
+        } else {
+            html += `<button class="shipyard-buy-btn" style="width:100%;padding:4px" onclick="UI.showAutoTradeSetup('${ship.id}')">🔄 Auto-Handel einrichten</button>`;
+        }
+        html += `</div>`;
+
         // Sell ship option
         const sellPrice = Math.floor(SHIP_TYPES[ship.typeId].cost * 0.4);
         if (Game.state.player.ships.length > 1) {
@@ -518,6 +569,185 @@ const UI = {
 
         html += '</div>';
         return html;
+    },
+
+    renderConvoyOptions(ship) {
+        const player = Game.state.player;
+        // Find other docked ships at same location
+        const otherShips = player.ships.filter(s =>
+            s.id !== ship.id && s.status === 'docked' && s.location === ship.location
+        );
+
+        if (otherShips.length === 0 && !ship.convoyId) return '';
+
+        let html = '<div style="padding:8px;background:rgba(230,168,23,0.08);border:1px solid rgba(230,168,23,0.15);border-radius:4px;margin-bottom:8px">';
+        html += '<div style="font-size:12px;color:var(--accent);margin-bottom:6px;font-weight:bold">⚓ Konvoi</div>';
+
+        if (ship.convoyId) {
+            // Already in convoy — show members & option to leave
+            const convoyShips = Convoy.getShips(player.ships, ship.convoyId);
+            html += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">';
+            html += 'Mitglieder: ' + convoyShips.map(s => s.name).join(', ');
+            html += '</div>';
+            html += `<button class="trade-btn sell" style="width:100%;padding:4px" onclick="UI.leaveConvoy('${ship.id}')">Konvoi verlassen</button>`;
+        } else if (otherShips.length > 0) {
+            // Can form convoy
+            html += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">';
+            html += `${otherShips.length} andere(s) Schiff(e) hier. Konvoi bilden für gemeinsame Reise & Kampfbonus.`;
+            html += '</div>';
+
+            // Checkboxes for each ship
+            otherShips.forEach(s => {
+                html += `<label style="display:block;font-size:11px;padding:3px 0;color:var(--text);cursor:pointer">
+                    <input type="checkbox" class="convoy-check" value="${s.id}" checked style="margin-right:6px">
+                    ${s.name} (${SHIP_TYPES[s.typeId].name})
+                </label>`;
+            });
+
+            html += `<button class="shipyard-buy-btn" style="width:100%;margin-top:6px" onclick="UI.formConvoy('${ship.id}')">Konvoi bilden</button>`;
+        }
+
+        html += '</div>';
+        return html;
+    },
+
+    formConvoy(leadShipId) {
+        const player = Game.state.player;
+        const leadShip = player.ships.find(s => s.id === leadShipId);
+        if (!leadShip) return;
+
+        // Get checked ships from checkboxes
+        const checks = document.querySelectorAll('.convoy-check:checked');
+        const shipIds = [leadShipId];
+        checks.forEach(cb => shipIds.push(cb.value));
+
+        const ships = shipIds.map(id => player.ships.find(s => s.id === id)).filter(Boolean);
+        if (ships.length < 2) {
+            this.showNotification('Mindestens 2 Schiffe für einen Konvoi nötig!', 'warning');
+            return;
+        }
+
+        Convoy.create(ships);
+        Sound.play('click');
+        this.addLogMessage(`Konvoi gebildet: ${ships.map(s => s.name).join(', ')}`, 'info');
+        this.showNotification(`Konvoi mit ${ships.length} Schiffen gebildet!`, 'success');
+        this.updateFleetTab();
+    },
+
+    leaveConvoy(shipId) {
+        const player = Game.state.player;
+        const ship = player.ships.find(s => s.id === shipId);
+        if (!ship || !ship.convoyId) return;
+
+        const convoyId = ship.convoyId;
+        const remaining = Convoy.getShips(player.ships, convoyId).filter(s => s.id !== shipId);
+
+        // Remove this ship from convoy
+        delete ship.convoyId;
+        delete ship.convoySpeed;
+
+        // If only 1 ship remains, disband entirely
+        if (remaining.length <= 1) {
+            Convoy.disband(player.ships, convoyId);
+        }
+
+        Sound.play('click');
+        this.addLogMessage(`${ship.name} hat den Konvoi verlassen.`, 'info');
+        this.updateFleetTab();
+    },
+
+    showAutoTradeSetup(shipId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship || ship.status !== 'docked' || !ship.location) return;
+
+        const overlay = document.getElementById('modal-overlay');
+        const content = document.getElementById('modal-content');
+
+        // Get connected cities for auto-trade route
+        const connectedIds = CITY_IDS.filter(cid => cid !== ship.location && findShortestPath(ship.location, cid));
+
+        let html = `<div style="max-width:380px">`;
+        html += `<h3 style="margin:0 0 12px;color:var(--accent)">🔄 Auto-Handel einrichten</h3>`;
+        html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">${ship.name} pendelt automatisch zwischen zwei Städten und handelt profitabel.</div>`;
+
+        html += `<div style="margin-bottom:12px">`;
+        html += `<label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Heimatstadt</label>`;
+        html += `<div style="font-size:13px;color:var(--text);padding:6px;background:rgba(255,255,255,0.05);border-radius:4px">${CITIES_DATA[ship.location].displayName}</div>`;
+        html += `</div>`;
+
+        html += `<div style="margin-bottom:12px">`;
+        html += `<label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Zielstadt</label>`;
+        html += `<select id="at-dest" style="width:100%;padding:6px;background:var(--panel-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:12px">`;
+        connectedIds.forEach(cid => {
+            const route = findShortestPath(ship.location, cid);
+            const days = route ? route.distance * 3 : '?';
+            html += `<option value="${cid}">${CITIES_DATA[cid].displayName} (~${days}d)</option>`;
+        });
+        html += `</select></div>`;
+
+        html += `<div style="margin-bottom:12px">`;
+        html += `<label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Min. Gewinn pro Ware: <span id="at-profit-val">10</span>%</label>`;
+        html += `<input type="range" id="at-profit" min="5" max="50" value="10" step="5" style="width:100%" oninput="document.getElementById('at-profit-val').textContent=this.value">`;
+        html += `</div>`;
+
+        html += `<div style="margin-bottom:12px">`;
+        html += `<label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Max. Einkauf: <span id="at-spend-val">50</span>% des Goldes</label>`;
+        html += `<input type="range" id="at-spend" min="10" max="90" value="50" step="10" style="width:100%" oninput="document.getElementById('at-spend-val').textContent=this.value">`;
+        html += `</div>`;
+
+        html += `<div style="display:flex;gap:8px;margin-top:16px">`;
+        html += `<button class="shipyard-buy-btn" style="flex:1" onclick="UI.startAutoTrade('${ship.id}')">Starten</button>`;
+        html += `<button class="modal-btn secondary" style="flex:1" onclick="document.getElementById('modal-overlay').classList.add('hidden')">Abbrechen</button>`;
+        html += `</div></div>`;
+
+        content.innerHTML = html;
+        overlay.classList.remove('hidden');
+    },
+
+    startAutoTrade(shipId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        const destSelect = document.getElementById('at-dest');
+        const profitSlider = document.getElementById('at-profit');
+        const spendSlider = document.getElementById('at-spend');
+        if (!destSelect) return;
+
+        const destCity = destSelect.value;
+        const minProfit = parseInt(profitSlider?.value || '10');
+        const maxSpendPct = parseInt(spendSlider?.value || '50');
+
+        ship.autoTrade = {
+            cityA: ship.location,
+            cityB: destCity,
+            minProfit: minProfit,
+            maxSpend: Game.state.player.gold * (maxSpendPct / 100)
+        };
+
+        // Close modal
+        document.getElementById('modal-overlay').classList.add('hidden');
+
+        Sound.play('click');
+        this.addLogMessage(`${ship.name}: Auto-Handel gestartet ${CITIES_DATA[ship.location].displayName} ↔ ${CITIES_DATA[destCity].displayName}`, 'trade');
+        this.showNotification('Auto-Handel aktiviert!', 'success');
+
+        // Immediately start first run
+        if (ship.status === 'docked') {
+            Trading.processAutoTrade(Game.state, ship);
+        }
+
+        this.updateFleetTab();
+    },
+
+    stopAutoTrade(shipId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        ship.autoTrade = null;
+        Sound.play('click');
+        this.addLogMessage(`${ship.name}: Auto-Handel gestoppt.`, 'info');
+        this.showNotification('Auto-Handel deaktiviert.', 'info');
+        this.updateFleetTab();
     },
 
     selectShip(shipId) {
@@ -536,15 +766,23 @@ const UI = {
             return;
         }
 
-        ship.route = route.path;
-        ship.routeIndex = 0;
-        ship.progress = 0;
-        ship.status = 'sailing';
-        ship.destination = destId;
-        ship.location = null;
+        // If ship is in a convoy, send all convoy members
+        if (ship.convoyId) {
+            Convoy.sail(Game.state.player.ships, ship.convoyId, route.path);
+            const convoyShips = Convoy.getShips(Game.state.player.ships, ship.convoyId);
+            Sound.play('sail');
+            this.addLogMessage(`Konvoi (${convoyShips.length} Schiffe) segelt nach ${CITIES_DATA[destId].displayName}.`, 'info');
+        } else {
+            ship.route = route.path;
+            ship.routeIndex = 0;
+            ship.progress = 0;
+            ship.status = 'sailing';
+            ship.destination = destId;
+            ship.location = null;
+            Sound.play('sail');
+            this.addLogMessage(`${ship.name} segelt nach ${CITIES_DATA[destId].displayName}.`, 'info');
+        }
 
-        Sound.play('sail');
-        this.addLogMessage(`${ship.name} segelt nach ${CITIES_DATA[destId].displayName}.`, 'info');
         this.selectedShipId = null;
         this.updateFleetTab();
     },
@@ -623,45 +861,10 @@ const UI = {
             return;
         }
 
-        const maxShips = Reputation.getMaxShips(Game.state);
-        const currentShips = Game.state.player.ships.length;
-        const atLimit = currentShips >= maxShips;
-
         let html = '';
-        if (atLimit) {
-            html += `<p style="color:var(--warning);font-size:11px;margin-bottom:8px">Schiffslimit erreicht (${currentShips}/${maxShips}). Steigt im Rang auf fuer mehr Schiffe!</p>`;
-        } else {
-            html += `<p style="color:var(--text-dim);font-size:11px;margin-bottom:8px">Schiffe: ${currentShips}/${maxShips}</p>`;
-        }
-
         SHIP_TYPE_IDS.forEach(typeId => {
             const type = SHIP_TYPES[typeId];
-            const unlocked = Reputation.isShipUnlocked(Game.state, typeId);
             const canAfford = Game.state.player.gold >= type.cost;
-
-            if (!unlocked) {
-                // Show locked ship
-                const reqRank = REPUTATION_RANKS.find(r => r.unlockedShips.includes(typeId) &&
-                    !REPUTATION_RANKS[Reputation.getRankIndex(Game.state)].unlockedShips.includes(typeId));
-                html += `<div class="shipyard-item" style="opacity:0.5">
-                    <div class="shipyard-item-header">
-                        <span class="shipyard-item-name">\uD83D\uDD12 ${type.name}</span>
-                        <span class="shipyard-item-cost">${Utils.formatGold(type.cost)}</span>
-                    </div>
-                    <div class="shipyard-item-stats">
-                        Fracht: ${type.capacity} | Geschw: ${type.speed} | Rumpf: ${type.hull} | Kanonen: ${type.cannons}
-                        <br><span style="color:var(--warning)">Erfordert Rang: ${reqRank ? reqRank.displayName : '?'}</span>
-                    </div>
-                    <button class="shipyard-buy-btn" disabled>Gesperrt</button>
-                </div>`;
-                return;
-            }
-
-            const canBuy = canAfford && !atLimit;
-            let btnText = 'Kaufen';
-            if (atLimit) btnText = 'Limit erreicht';
-            else if (!canAfford) btnText = 'Zu teuer';
-
             html += `<div class="shipyard-item">
                 <div class="shipyard-item-header">
                     <span class="shipyard-item-name">${type.name}</span>
@@ -672,7 +875,7 @@ const UI = {
                     <br><span style="color:var(--text-dim)">${type.description}</span>
                 </div>
                 <button class="shipyard-buy-btn" onclick="UI.buyShip('${typeId}','${cityId}')"
-                    ${canBuy ? '' : 'disabled'}>${btnText}</button>
+                    ${canAfford ? '' : 'disabled'}>${canAfford ? 'Kaufen' : 'Zu teuer'}</button>
             </div>`;
         });
 
@@ -685,23 +888,11 @@ const UI = {
             this.showNotification('Nicht genug Gold!', 'warning');
             return;
         }
-        const maxShips = Reputation.getMaxShips(Game.state);
-        if (Game.state.player.ships.length >= maxShips) {
-            this.showNotification(`Schiffslimit erreicht (${maxShips})! Steigt im Rang auf.`, 'warning');
-            return;
-        }
-        if (!Reputation.isShipUnlocked(Game.state, typeId)) {
-            this.showNotification('Dieser Schiffstyp ist noch gesperrt!', 'warning');
-            return;
-        }
 
         Game.state.player.gold -= type.cost;
         const name = generateShipName();
         const ship = createShip(typeId, name, cityId);
         Game.state.player.ships.push(ship);
-
-        // Reputation gain for acquiring a ship
-        Reputation.onShipAcquired(Game.state);
 
         Sound.play('build');
         this.addLogMessage(`Neues Schiff "${name}" (${type.name}) in ${CITIES_DATA[cityId].displayName} gekauft!`, 'trade');
@@ -780,200 +971,6 @@ const UI = {
         this.updateTopBar(Game.state);
     },
 
-    // === QUESTS TAB ===
-    updateQuestsTab() {
-        const panel = document.getElementById('quests-list');
-        if (!Game.state || !Game.state.quests) {
-            panel.innerHTML = '<p style="color:var(--text-dim)">Keine Auftraege verfuegbar.</p>';
-            return;
-        }
-
-        const active = Quests.getActiveQuests(Game.state);
-        const completed = Quests.getCompletedQuests(Game.state);
-
-        let html = '';
-
-        // Active quests
-        if (active.length > 0) {
-            html += '<h4 class="quests-section-title">Aktive Auftraege</h4>';
-            active.forEach(quest => {
-                const progress = quest.progressText ? quest.progressText(Game.state) : '';
-                html += `<div class="quest-card active">
-                    <div class="quest-header">
-                        <span class="quest-icon">${quest.icon}</span>
-                        <span class="quest-name">${quest.name}</span>
-                    </div>
-                    <div class="quest-desc">${quest.description}</div>
-                    ${progress ? `<div class="quest-progress"><div class="quest-progress-text">${progress}</div></div>` : ''}
-                    <div class="quest-reward">Belohnung: <span class="quest-reward-value">${quest.rewardText}</span></div>
-                </div>`;
-            });
-        }
-
-        // Completed quests
-        if (completed.length > 0) {
-            html += '<h4 class="quests-section-title" style="margin-top:16px">Abgeschlossen</h4>';
-            completed.forEach(quest => {
-                const data = Game.state.quests.completed[quest.id];
-                const dateStr = data.completedAt ? Utils.formatDate(data.completedAt.day, data.completedAt.month, data.completedAt.year) : '';
-                html += `<div class="quest-card completed">
-                    <div class="quest-header">
-                        <span class="quest-icon">${quest.icon}</span>
-                        <span class="quest-name">${quest.name}</span>
-                        <span class="quest-check">\u2714</span>
-                    </div>
-                    <div class="quest-desc">${quest.description}</div>
-                    <div class="quest-completed-info">${dateStr} \u2014 ${quest.rewardText} erhalten</div>
-                </div>`;
-            });
-        }
-
-        if (active.length === 0 && completed.length === 0) {
-            html = '<p style="color:var(--text-dim)">Keine Auftraege verfuegbar.</p>';
-        }
-
-        panel.innerHTML = html;
-    },
-
-    showQuestComplete(quest) {
-        const html = `<div class="event-popup">
-            <div class="event-icon">${quest.icon}</div>
-            <h3>Auftrag abgeschlossen!</h3>
-            <div class="event-text"><strong>${quest.name}</strong><br>${quest.description}</div>
-            <div style="margin:12px 0;padding:8px;background:rgba(39,174,96,0.15);border-radius:4px;border:1px solid var(--success)">
-                <span style="color:var(--success);font-weight:bold">Belohnung: ${quest.rewardText}</span>
-            </div>
-            <div class="modal-buttons">
-                <button class="modal-btn primary" onclick="UI.hideModal()">Vortrefflich!</button>
-            </div>
-        </div>`;
-        this.showModal(html);
-        Sound.play('gold');
-    },
-
-    // === REPUTATION TAB ===
-    updateReputationTab() {
-        const panel = document.getElementById('reputation-list');
-        if (!panel || !Game.state || !Game.state.player.rep) {
-            if (panel) panel.innerHTML = '<p style="color:var(--text-dim)">Keine Reputationsdaten.</p>';
-            return;
-        }
-
-        const rep = Game.state.player.rep;
-        const rank = Reputation.getRank(Game.state);
-        const nextRank = Reputation.getNextRank(Game.state);
-        const progress = Reputation.getProgressToNext(Game.state);
-        const progressPct = Math.round(progress * 100);
-
-        let html = '';
-
-        // Current rank display
-        html += `<div class="rep-rank-display">
-            <div class="rep-rank-icon">${rank.icon}</div>
-            <div class="rep-rank-info">
-                <div class="rep-rank-name">${rank.displayName}</div>
-                <div class="rep-rank-desc">${rank.description}</div>
-            </div>
-        </div>`;
-
-        // Score and progress
-        html += `<div class="rep-score-section">
-            <div class="rep-score-row"><span>Reputation:</span><span style="color:var(--gold-color);font-weight:bold">${Utils.formatNumber(rep.score)}</span></div>`;
-        if (nextRank) {
-            html += `<div class="rep-score-row"><span>N\u00e4chster Rang:</span><span>${nextRank.displayName} (${Utils.formatNumber(nextRank.minRep)})</span></div>`;
-            html += `<div class="rep-progress-section">
-                <div class="progress-bar"><div class="progress-fill gold" style="width:${progressPct}%"></div></div>
-                <div class="rep-progress-label">${progressPct}%</div>
-            </div>`;
-        } else {
-            html += `<div class="rep-score-row"><span style="color:var(--gold-color)">H\u00f6chster Rang erreicht!</span></div>`;
-        }
-        html += '</div>';
-
-        // Rank benefits
-        html += '<div class="rep-benefits-section"><h4 class="rep-section-title">Rang-Vorteile</h4>';
-        html += `<div class="rep-benefit-row"><span>Handelspreise:</span><span style="color:var(--success)">${rank.priceDiscount > 0 ? '-' + Math.round(rank.priceDiscount * 100) + '%' : 'Keine'}</span></div>`;
-        html += `<div class="rep-benefit-row"><span>Wartungskosten:</span><span style="color:var(--success)">${rank.maintenanceDiscount > 0 ? '-' + Math.round(rank.maintenanceDiscount * 100) + '%' : 'Keine'}</span></div>`;
-        html += `<div class="rep-benefit-row"><span>Max. Schiffe:</span><span>${rank.maxShips}</span></div>`;
-        html += `<div class="rep-benefit-row"><span>Schiffstypen:</span><span>${rank.unlockedShips.map(id => SHIP_TYPES[id] ? SHIP_TYPES[id].name : id).join(', ')}</span></div>`;
-        html += '</div>';
-
-        // All ranks overview
-        html += '<div class="rep-ranks-overview"><h4 class="rep-section-title">Alle R\u00e4nge</h4>';
-        REPUTATION_RANKS.forEach((r, i) => {
-            const isCurrent = i === rep.rankIndex;
-            const isReached = i <= rep.rankIndex;
-            html += `<div class="rep-rank-row ${isCurrent ? 'current' : ''} ${isReached ? 'reached' : 'locked'}">
-                <span class="rep-rank-row-icon">${r.icon}</span>
-                <span class="rep-rank-row-name">${r.displayName}</span>
-                <span class="rep-rank-row-req">${Utils.formatNumber(r.minRep)} Rep</span>
-            </div>`;
-        });
-        html += '</div>';
-
-        // Reputation history
-        if (rep.history && rep.history.length > 0) {
-            html += '<div class="rep-history-section"><h4 class="rep-section-title">Letzte Ereignisse</h4>';
-            const shown = rep.history.slice(0, 15);
-            shown.forEach(entry => {
-                const amtClass = entry.amount > 0 ? 'rep-gain' : 'rep-loss';
-                const amtStr = entry.amount > 0 ? `+${entry.amount}` : `${entry.amount}`;
-                const dateStr = entry.date ? Utils.formatDateShort(entry.date.day, entry.date.month, entry.date.year) : '';
-                html += `<div class="rep-history-row">
-                    <span class="rep-history-date">${dateStr}</span>
-                    <span class="rep-history-text">${entry.text}</span>
-                    <span class="rep-history-amount ${amtClass}">${amtStr}</span>
-                </div>`;
-            });
-            html += '</div>';
-        }
-
-        panel.innerHTML = html;
-    },
-
-    // Animated rank-up popup
-    showRepRankUp(oldRank, newRank) {
-        const unlocks = [];
-        if (newRank.maxShips > oldRank.maxShips) {
-            unlocks.push(`Max. Schiffe: ${newRank.maxShips}`);
-        }
-        const newShips = newRank.unlockedShips.filter(s => !oldRank.unlockedShips.includes(s));
-        if (newShips.length > 0) {
-            unlocks.push(`Neue Schiffe: ${newShips.map(id => SHIP_TYPES[id] ? SHIP_TYPES[id].name : id).join(', ')}`);
-        }
-        if (newRank.priceDiscount > oldRank.priceDiscount) {
-            unlocks.push(`Handelsrabatt: -${Math.round(newRank.priceDiscount * 100)}%`);
-        }
-        if (newRank.maintenanceDiscount > oldRank.maintenanceDiscount) {
-            unlocks.push(`Wartungsrabatt: -${Math.round(newRank.maintenanceDiscount * 100)}%`);
-        }
-
-        let unlocksHtml = '';
-        if (unlocks.length > 0) {
-            unlocksHtml = `<div class="rankup-unlocks">
-                <div class="rankup-unlocks-title">Freigeschaltet:</div>
-                ${unlocks.map(u => `<div class="rankup-unlock-item">\u2714 ${u}</div>`).join('')}
-            </div>`;
-        }
-
-        const html = `<div class="event-popup rankup-popup">
-            <div class="rankup-glow"></div>
-            <div class="rankup-icon">${newRank.icon}</div>
-            <h3 class="rankup-title">Befoerderung!</h3>
-            <div class="rankup-transition">
-                <span class="rankup-old">${oldRank.displayName}</span>
-                <span class="rankup-arrow">\u279C</span>
-                <span class="rankup-new">${newRank.displayName}</span>
-            </div>
-            <div class="rankup-desc">${newRank.description}</div>
-            ${unlocksHtml}
-            <div class="modal-buttons">
-                <button class="modal-btn primary" onclick="UI.hideModal()">Vortrefflich!</button>
-            </div>
-        </div>`;
-        this.showModal(html);
-    },
-
     // === WIND ===
     updateWind(gameState) {
         const directions = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'];
@@ -1041,31 +1038,18 @@ const UI = {
         const daysPlayed = Game.state.player.daysPlayed;
         const shipsOwned = Game.state.player.ships.length;
         const totalTraded = Game.state.player.totalTraded || 0;
-        const repScore = Reputation.getScore(Game.state);
-        const rank = Reputation.getRank(Game.state);
 
         const html = `<h3>Spielmenue</h3>
             <div style="font-size:12px;margin-bottom:16px;padding:10px;background:rgba(15,52,96,0.3);border-radius:4px">
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Rang:</span><span style="color:var(--accent)">${rank.icon} ${rank.displayName}</span></div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Reputation:</span><span style="color:var(--gold-color)">${Utils.formatNumber(repScore)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Vermoegen:</span><span style="color:var(--gold-color)">${Utils.formatGold(netWorth)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Handelsvolumen:</span><span>${Utils.formatGold(totalTraded)}</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Tage gespielt:</span><span>${daysPlayed}</span></div>
-                <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}/${Reputation.getMaxShips(Game.state)}</span></div>
-            </div>
-            <div style="font-size:11px;margin-bottom:12px;padding:8px;background:rgba(15,52,96,0.2);border-radius:4px">
-                <div style="margin-bottom:6px"><span>Lautstaerke:</span>
-                    <input type="range" min="0" max="100" value="${Math.round(Sound.masterVolume * 100)}" style="width:100%;accent-color:var(--accent)" oninput="Sound.setMasterVolume(this.value/100)">
-                </div>
-                <div style="display:flex;gap:8px">
-                    <label style="flex:1">Musik <input type="range" min="0" max="100" value="${Math.round(Sound.musicVolume * 100)}" style="width:100%;accent-color:var(--accent)" oninput="Sound.setMusicVolume(this.value/100)"></label>
-                    <label style="flex:1">Effekte <input type="range" min="0" max="100" value="${Math.round(Sound.sfxVolume * 100)}" style="width:100%;accent-color:var(--accent)" oninput="Sound.setSfxVolume(this.value/100)"></label>
-                </div>
+                <div style="display:flex;justify-content:space-between"><span>Schiffe:</span><span>${shipsOwned}</span></div>
             </div>
             <div class="modal-buttons" style="flex-direction:column;gap:8px">
                 <button class="modal-btn primary" onclick="Game.save();UI.showNotification('Gespeichert!','success');UI.hideModal()">Spiel speichern</button>
+                <button class="modal-btn secondary" onclick="UI.hideModal();UI.showStatsScreen()">📊 Statistiken</button>
                 <button class="modal-btn secondary" onclick="Sound.toggle();UI.hideModal();UI.showNotification(Sound.enabled?'Ton an':'Ton aus','info')">Ton ${Sound.enabled ? 'aus' : 'ein'}</button>
-                <button class="modal-btn secondary" onclick="UI.hideModal();Tutorial.reset();Tutorial.start()">Tutorial starten</button>
                 <button class="modal-btn danger" onclick="UI.hideModal();Game.returnToTitle()">Zum Hauptmenue</button>
                 <button class="modal-btn secondary" onclick="UI.hideModal()">Zurueck</button>
             </div>`;
@@ -1073,10 +1057,465 @@ const UI = {
     },
 
     showRankUp(oldRank, newRank) {
-        // Legacy wrapper - redirect to new reputation rank-up display
-        this.showRepRankUp(
-            { displayName: oldRank, icon: '', maxShips: 3, priceDiscount: 0, maintenanceDiscount: 0, unlockedShips: [] },
-            { displayName: newRank, icon: '\uD83C\uDFC5', description: '', maxShips: 3, priceDiscount: 0, maintenanceDiscount: 0, unlockedShips: [] }
-        );
+        const html = `<div class="event-popup">
+            <div class="event-icon">\uD83C\uDFC5</div>
+            <h3>Befoerderung!</h3>
+            <div class="event-text">Ihr wurdet vom ${oldRank} zum <strong style="color:var(--accent)">${newRank}</strong> befoerdert!</div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary" onclick="UI.hideModal()">Vortrefflich!</button>
+            </div>
+        </div>`;
+        this.showModal(html);
+        Sound.play('newgame');
+    },
+
+    // ============================================
+    // GAME END SCREEN (Victory / Defeat)
+    // ============================================
+    showGameEndScreen(type, stats) {
+        const isVictory = type === 'victory';
+        const icon = isVictory ? '👑' : '💀';
+        const title = isVictory ? 'SIEG! Ihr seid Eldermann!' : 'BANKROTT!';
+        const subtitle = isVictory
+            ? `${stats.playerName}, Ihr habt die Hanse erobert!`
+            : `${stats.playerName}, Eure Schulden haben Euch ruiniert.`;
+        const color = isVictory ? 'var(--gold-color)' : '#e74c3c';
+
+        let html = `<div style="text-align:center;max-width:480px">
+            <div style="font-size:48px;margin-bottom:8px;animation:combatPulse 2s infinite">${icon}</div>
+            <h2 style="color:${color};margin:0 0 4px;font-size:24px">${title}</h2>
+            <div style="color:var(--text-dim);margin-bottom:16px;font-size:13px">${subtitle}</div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left;margin-bottom:16px;font-size:12px">
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Vermögen</div>
+                    <div style="color:var(--gold-color);font-size:16px;font-weight:bold">${Utils.formatGold(stats.wealth)}</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Gespielt</div>
+                    <div style="color:var(--text);font-size:16px;font-weight:bold">${stats.yearsPlayed} Jahre</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Handelsvolumen</div>
+                    <div style="color:var(--text);font-weight:bold">${Utils.formatGold(stats.totalTraded)}</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Reisen</div>
+                    <div style="color:var(--text);font-weight:bold">${stats.voyagesCompleted}</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Schlachten</div>
+                    <div style="color:var(--text);font-weight:bold">⚔${stats.battlesWon} ✓ / ${stats.battlesLost} ✗ / ${stats.battlesFled} 🏃</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Gebäude</div>
+                    <div style="color:var(--text);font-weight:bold">${stats.buildingCount} in ${stats.citiesWithKontor} Städten</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Flotte</div>
+                    <div style="color:var(--text);font-weight:bold">${stats.shipCount} Schiffe</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px">
+                    <div style="color:var(--text-dim)">Schwierigkeit</div>
+                    <div style="color:var(--text);font-weight:bold">${stats.difficulty === 'easy' ? 'Leicht' : stats.difficulty === 'hard' ? 'Schwer' : 'Normal'}</div>
+                </div>
+            </div>`;
+
+        // Mini wealth chart
+        if (stats.wealthHistory && stats.wealthHistory.length > 2) {
+            html += `<canvas id="end-wealth-chart" width="440" height="100" style="width:100%;height:100px;border-radius:4px;background:rgba(15,52,96,0.3);margin-bottom:16px"></canvas>`;
+        }
+
+        html += `<div class="modal-buttons" style="flex-direction:column;gap:8px">
+                ${isVictory ? '<button class="modal-btn primary" onclick="UI.hideModal();Game.paused=false">Weiterspielen</button>' : ''}
+                <button class="modal-btn ${isVictory ? 'secondary' : 'primary'}" onclick="UI.hideModal();Game.returnToTitle()">Hauptmenü</button>
+            </div>
+        </div>`;
+
+        this.showModal(html);
+
+        // Draw wealth chart after DOM update
+        if (stats.wealthHistory && stats.wealthHistory.length > 2) {
+            requestAnimationFrame(() => this._drawMiniChart('end-wealth-chart', stats.wealthHistory));
+        }
+    },
+
+    // ============================================
+    // STATISTICS DASHBOARD (in Game Menu)
+    // ============================================
+    showStatsScreen() {
+        const stats = Game.getGameStats();
+        const p = Game.state.player;
+
+        let html = `<div style="max-width:520px">
+            <h3 style="margin:0 0 12px;color:var(--accent)">📊 Statistiken</h3>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;font-size:11px">
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px;text-align:center">
+                    <div style="color:var(--gold-color);font-size:18px;font-weight:bold">${Utils.formatGold(stats.wealth)}</div>
+                    <div style="color:var(--text-dim)">Vermögen</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px;text-align:center">
+                    <div style="color:var(--text);font-size:18px;font-weight:bold">${stats.yearsPlayed}J ${Game.state.date.month}M</div>
+                    <div style="color:var(--text-dim)">Spielzeit</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px;text-align:center">
+                    <div style="color:var(--accent);font-size:18px;font-weight:bold">${stats.rank}</div>
+                    <div style="color:var(--text-dim)">Rang</div>
+                </div>
+            </div>
+
+            <canvas id="stats-wealth-chart" width="480" height="120" style="width:100%;height:120px;border-radius:4px;background:rgba(15,52,96,0.2);margin-bottom:12px"></canvas>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:12px">
+                <div style="padding:6px 8px;background:rgba(15,52,96,0.2);border-radius:4px;display:flex;justify-content:space-between">
+                    <span style="color:var(--text-dim)">Handelsvolumen</span><span style="color:var(--text)">${Utils.formatGold(stats.totalTraded)}</span>
+                </div>
+                <div style="padding:6px 8px;background:rgba(15,52,96,0.2);border-radius:4px;display:flex;justify-content:space-between">
+                    <span style="color:var(--text-dim)">Reisen</span><span style="color:var(--text)">${stats.voyagesCompleted}</span>
+                </div>
+                <div style="padding:6px 8px;background:rgba(15,52,96,0.2);border-radius:4px;display:flex;justify-content:space-between">
+                    <span style="color:var(--text-dim)">Schlachten ⚔</span><span style="color:var(--text)">${stats.battlesWon}W / ${stats.battlesLost}L / ${stats.battlesFled}F</span>
+                </div>
+                <div style="padding:6px 8px;background:rgba(15,52,96,0.2);border-radius:4px;display:flex;justify-content:space-between">
+                    <span style="color:var(--text-dim)">Schiffe</span><span style="color:var(--text)">${stats.shipCount}</span>
+                </div>
+                <div style="padding:6px 8px;background:rgba(15,52,96,0.2);border-radius:4px;display:flex;justify-content:space-between">
+                    <span style="color:var(--text-dim)">Gebäude</span><span style="color:var(--text)">${stats.buildingCount}</span>
+                </div>
+                <div style="padding:6px 8px;background:rgba(15,52,96,0.2);border-radius:4px;display:flex;justify-content:space-between">
+                    <span style="color:var(--text-dim)">Städte</span><span style="color:var(--text)">${stats.citiesWithKontor} / ${CITY_IDS.length}</span>
+                </div>
+            </div>
+
+            <h4 style="margin:0 0 6px;font-size:12px;color:var(--text-dim)">Vermögensaufteilung</h4>
+            <div style="display:flex;gap:2px;height:20px;border-radius:4px;overflow:hidden;margin-bottom:16px">
+                <div style="flex:${stats.gold};background:var(--gold-color);min-width:2px" title="Gold: ${Utils.formatGold(stats.gold)}"></div>
+                <div style="flex:${stats.shipValue};background:#3498db;min-width:2px" title="Schiffe: ${Utils.formatGold(stats.shipValue)}"></div>
+                <div style="flex:${stats.buildingValue};background:#2ecc71;min-width:2px" title="Gebäude: ${Utils.formatGold(stats.buildingValue)}"></div>
+                <div style="flex:${stats.cargoValue};background:#e67e22;min-width:2px" title="Fracht: ${Utils.formatGold(stats.cargoValue)}"></div>
+            </div>
+            <div style="display:flex;gap:12px;font-size:10px;margin-bottom:16px;flex-wrap:wrap">
+                <span><span style="color:var(--gold-color)">■</span> Gold ${Utils.formatGold(stats.gold)}</span>
+                <span><span style="color:#3498db">■</span> Schiffe ${Utils.formatGold(stats.shipValue)}</span>
+                <span><span style="color:#2ecc71">■</span> Gebäude ${Utils.formatGold(stats.buildingValue)}</span>
+                <span><span style="color:#e67e22">■</span> Fracht ${Utils.formatGold(stats.cargoValue)}</span>
+            </div>
+
+            <button class="modal-btn secondary" style="width:100%" onclick="UI.hideModal()">Schließen</button>
+        </div>`;
+
+        this.showModal(html);
+        requestAnimationFrame(() => this._drawMiniChart('stats-wealth-chart', stats.wealthHistory));
+    },
+
+    // Mini sparkline chart renderer
+    _drawMiniChart(canvasId, wealthHistory) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !wealthHistory || wealthHistory.length < 2) return;
+
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        const pad = 10;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const values = wealthHistory.map(wh => wh.wealth);
+        const min = Math.min(...values) * 0.9;
+        const max = Math.max(...values) * 1.1 || 1;
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(100,130,180,0.15)';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 4; i++) {
+            const y = pad + (h - pad * 2) * (i / 3);
+            ctx.beginPath();
+            ctx.moveTo(pad, y);
+            ctx.lineTo(w - pad, y);
+            ctx.stroke();
+        }
+
+        // Wealth line
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(230, 168, 23, 0.9)';
+        ctx.lineWidth = 2;
+        values.forEach((v, i) => {
+            const x = pad + (w - pad * 2) * (i / (values.length - 1));
+            const y = h - pad - ((v - min) / (max - min)) * (h - pad * 2);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Fill under line
+        const lastX = pad + (w - pad * 2);
+        const lastY = h - pad - ((values[values.length - 1] - min) / (max - min)) * (h - pad * 2);
+        ctx.lineTo(lastX, h - pad);
+        ctx.lineTo(pad, h - pad);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(230, 168, 23, 0.08)';
+        ctx.fill();
+
+        // Labels
+        ctx.fillStyle = 'rgba(200, 220, 240, 0.5)';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(Utils.formatGold(Math.floor(max)), pad + 2, pad + 8);
+        ctx.fillText(Utils.formatGold(Math.floor(min)), pad + 2, h - pad - 2);
+    },
+
+    // ============================================
+    // PRICE HISTORY CHART (in Trade Tab)
+    // ============================================
+    showPriceChart(goodId, cityId) {
+        const cityState = Game.state.cities[cityId];
+        if (!cityState) return;
+        const market = cityState.market[goodId];
+        if (!market || !market.priceHistory) return;
+        const good = GOODS[goodId];
+
+        let html = `<div style="max-width:420px">
+            <h3 style="margin:0 0 8px;color:var(--accent)">${good.icon} ${good.name} — Preisverlauf</h3>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">${CITIES_DATA[cityId].displayName}</div>
+            <canvas id="price-chart-canvas" width="400" height="160" style="width:100%;height:160px;border-radius:4px;background:rgba(15,52,96,0.3);margin-bottom:8px"></canvas>
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:12px">
+                <span>Aktuell: <b style="color:var(--gold-color)">${market.price}g</b></span>
+                <span>Ø ${market.avgPrice}g</span>
+                <span style="color:#2ecc71">Min: ${market.minPrice}g</span>
+                <span style="color:#e74c3c">Max: ${market.maxPrice}g</span>
+            </div>
+            <button class="modal-btn secondary" style="width:100%" onclick="UI.hideModal()">Schließen</button>
+        </div>`;
+
+        this.showModal(html);
+        requestAnimationFrame(() => {
+            const canvas = document.getElementById('price-chart-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height, pad = 15;
+            ctx.clearRect(0, 0, w, h);
+
+            const prices = market.priceHistory;
+            const base = good.basePrice;
+            const min = Math.min(...prices, base) * 0.85;
+            const max = Math.max(...prices, base) * 1.15 || 1;
+
+            // Base price line
+            const baseY = h - pad - ((base - min) / (max - min)) * (h - pad * 2);
+            ctx.strokeStyle = 'rgba(100,130,180,0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(pad, baseY);
+            ctx.lineTo(w - pad, baseY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(100,130,180,0.5)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Basis ${base}g`, w - pad - 2, baseY - 3);
+
+            // Price line
+            ctx.beginPath();
+            ctx.strokeStyle = '#e6a817';
+            ctx.lineWidth = 2;
+            prices.forEach((p, i) => {
+                const x = pad + (w - pad * 2) * (i / (prices.length - 1));
+                const y = h - pad - ((p - min) / (max - min)) * (h - pad * 2);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Current price dot
+            const lastIdx = prices.length - 1;
+            const cx = pad + (w - pad * 2);
+            const cy = h - pad - ((prices[lastIdx] - min) / (max - min)) * (h - pad * 2);
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#e6a817';
+            ctx.fill();
+
+            // Axis labels
+            ctx.fillStyle = 'rgba(200,220,240,0.5)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${Math.floor(max)}g`, pad, pad + 6);
+            ctx.fillText(`${Math.floor(min)}g`, pad, h - pad + 10);
+        });
+    },
+
+    // ============================================
+    // TUTORIAL SYSTEM
+    // ============================================
+    tutorialSteps: [
+        { target: '.tab-btn[data-tab="trade"]', text: 'Willkommen, Händler! Klickt auf den Handels-Tab um zu beginnen.', highlight: 'trade-tab' },
+        { target: '.trade-btn.buy', text: 'Kauft günstige Waren ein. Achtet auf grüne Pfeile — die zeigen steigende Preise!', highlight: 'trade-panel' },
+        { target: '.tab-btn[data-tab="fleet"]', text: 'Im Flotten-Tab könnt ihr eure Schiffe verwalten und Ziele wählen.', highlight: 'fleet-tab' },
+        { target: '#map-canvas', text: 'Klickt auf eine andere Stadt auf der Karte. Dorthin segelt euer Schiff!', highlight: 'map' },
+        { target: '.tab-btn[data-tab="build"]', text: 'Baut Kontore und Produktionsstätten um passives Einkommen zu generieren.', highlight: 'build-tab' },
+        { target: null, text: 'Tipp: Kauft billig, segelt zur nächsten Stadt, verkauft teuer. So wächst euer Imperium! Viel Erfolg!', highlight: null }
+    ],
+
+    showTutorial() {
+        if (!Game.state) return;
+        const step = Game.state.player.tutorialStep || 0;
+        if (step >= this.tutorialSteps.length) {
+            Game.state.player.tutorialDone = true;
+            return;
+        }
+
+        const tutorial = this.tutorialSteps[step];
+        this._showTutorialBubble(tutorial.text, step);
+    },
+
+    _showTutorialBubble(text, step) {
+        // Remove existing
+        const existing = document.getElementById('tutorial-bubble');
+        if (existing) existing.remove();
+
+        const isLast = step >= this.tutorialSteps.length - 1;
+
+        const bubble = document.createElement('div');
+        bubble.id = 'tutorial-bubble';
+        bubble.innerHTML = `
+            <div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;
+                background:rgba(10,20,40,0.95);border:2px solid var(--accent);border-radius:12px;
+                padding:16px 20px;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.6);
+                animation:modalIn 0.3s ease">
+                <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:12px">${text}</div>
+                <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+                    <span style="font-size:10px;color:var(--text-dim)">${step + 1} / ${this.tutorialSteps.length}</span>
+                    <div style="display:flex;gap:8px">
+                        <button onclick="UI.skipTutorial()" style="padding:4px 12px;font-size:11px;background:transparent;
+                            color:var(--text-dim);border:1px solid var(--border);border-radius:4px;cursor:pointer">
+                            Überspringen</button>
+                        <button onclick="UI.nextTutorial()" style="padding:4px 16px;font-size:11px;background:var(--accent);
+                            color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold">
+                            ${isLast ? 'Los geht\'s!' : 'Weiter →'}</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(bubble);
+    },
+
+    nextTutorial() {
+        if (!Game.state) return;
+        Game.state.player.tutorialStep = (Game.state.player.tutorialStep || 0) + 1;
+        Sound.play('click');
+
+        const existing = document.getElementById('tutorial-bubble');
+        if (existing) existing.remove();
+
+        if (Game.state.player.tutorialStep >= this.tutorialSteps.length) {
+            Game.state.player.tutorialDone = true;
+            this.showNotification('Tutorial abgeschlossen! Viel Erfolg, Händler!', 'success');
+        } else {
+            this.showTutorial();
+        }
+    },
+
+    skipTutorial() {
+        if (!Game.state) return;
+        Game.state.player.tutorialDone = true;
+        Game.state.player.tutorialStep = this.tutorialSteps.length;
+        const existing = document.getElementById('tutorial-bubble');
+        if (existing) existing.remove();
+        Sound.play('click');
+    },
+
+    // ============================================
+    // CREW MANAGEMENT
+    // ============================================
+    showCrewManagement(shipId) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        const maxCrew = ship.maxCrew || SHIP_TYPES[ship.typeId].crew;
+        const crewCost = 25; // per sailor
+        const currentCrew = ship.crew;
+        const canHire = Math.min(maxCrew - currentCrew, Math.floor(Game.state.player.gold / crewCost));
+
+        let html = `<div style="max-width:380px">
+            <h3 style="margin:0 0 12px;color:var(--accent)">👥 Crew — ${ship.name}</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:12px">
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px;text-align:center">
+                    <div style="color:var(--text-dim)">Aktuelle Crew</div>
+                    <div style="font-size:20px;font-weight:bold;color:${currentCrew < maxCrew * 0.5 ? 'var(--danger)' : 'var(--text)'}">${currentCrew}</div>
+                </div>
+                <div style="padding:8px;background:rgba(15,52,96,0.3);border-radius:4px;text-align:center">
+                    <div style="color:var(--text-dim)">Maximum</div>
+                    <div style="font-size:20px;font-weight:bold">${maxCrew}</div>
+                </div>
+            </div>
+            <div style="margin-bottom:8px;font-size:11px;color:var(--text-dim)">
+                Mehr Crew = stärkerer Kampfbonus & schnelleres Segeln.<br>
+                Kosten: ${crewCost} G pro Matrose.
+            </div>`;
+
+        // Crew bar
+        const crewPct = Math.round(currentCrew / maxCrew * 100);
+        const crewColor = crewPct > 60 ? '#2eac68' : (crewPct > 30 ? '#e8a020' : '#d94040');
+        html += `<div style="height:12px;background:rgba(0,0,0,0.3);border-radius:6px;overflow:hidden;margin-bottom:12px">
+            <div style="height:100%;width:${crewPct}%;background:${crewColor};border-radius:6px;transition:width 0.3s"></div>
+        </div>`;
+
+        // Hire buttons
+        html += `<div style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="trade-btn buy" style="flex:1;padding:6px" onclick="UI.hireCrew('${ship.id}',1)" ${canHire < 1 ? 'disabled' : ''}>+1 (${crewCost}G)</button>
+            <button class="trade-btn buy" style="flex:1;padding:6px" onclick="UI.hireCrew('${ship.id}',5)" ${canHire < 1 ? 'disabled' : ''}>+5 (${crewCost*5}G)</button>
+            <button class="trade-btn buy" style="flex:1;padding:6px" onclick="UI.hireCrew('${ship.id}',${maxCrew - currentCrew})" ${canHire < 1 ? 'disabled' : ''}>Voll (${(maxCrew-currentCrew)*crewCost}G)</button>
+        </div>`;
+
+        // Fire buttons
+        html += `<div style="display:flex;gap:6px;margin-bottom:16px">
+            <button class="trade-btn sell" style="flex:1;padding:6px" onclick="UI.fireCrew('${ship.id}',1)" ${currentCrew <= 3 ? 'disabled' : ''}>-1</button>
+            <button class="trade-btn sell" style="flex:1;padding:6px" onclick="UI.fireCrew('${ship.id}',5)" ${currentCrew <= 3 ? 'disabled' : ''}>-5</button>
+        </div>`;
+
+        html += `<button class="modal-btn secondary" style="width:100%" onclick="UI.hideModal()">Schließen</button>
+        </div>`;
+
+        this.showModal(html);
+    },
+
+    hireCrew(shipId, amount) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        const maxCrew = ship.maxCrew || SHIP_TYPES[ship.typeId].crew;
+        const crewCost = 25;
+        const actual = Math.min(amount, maxCrew - ship.crew, Math.floor(Game.state.player.gold / crewCost));
+
+        if (actual <= 0) {
+            this.showNotification('Kann keine Crew anheuern!', 'warning');
+            return;
+        }
+
+        ship.crew += actual;
+        Game.state.player.gold -= actual * crewCost;
+        Sound.play('coins');
+        this.addLogMessage(`${actual} Matrosen für ${ship.name} angeheuert. (${actual * crewCost} G)`, 'info');
+        this.showCrewManagement(shipId); // Refresh
+        this.updateTopBar(Game.state);
+    },
+
+    fireCrew(shipId, amount) {
+        const ship = Game.state.player.ships.find(s => s.id === shipId);
+        if (!ship) return;
+
+        const minCrew = 3;
+        const actual = Math.min(amount, ship.crew - minCrew);
+
+        if (actual <= 0) {
+            this.showNotification('Mindestens 3 Matrosen benötigt!', 'warning');
+            return;
+        }
+
+        ship.crew -= actual;
+        Sound.play('click');
+        this.addLogMessage(`${actual} Matrosen von ${ship.name} entlassen.`, 'info');
+        this.showCrewManagement(shipId); // Refresh
     }
 };
