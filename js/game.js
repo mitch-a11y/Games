@@ -340,6 +340,11 @@ const Game = {
         const buildingMaintenance = Buildings.getMaintenanceCost(this.state);
         const totalMaintenance = shipMaintenance + buildingMaintenance;
 
+        // Bank loan interest processing
+        if (typeof Bank !== 'undefined') {
+            Bank.monthlyProcess(this.state);
+        }
+
         if (totalMaintenance > 0) {
             this.state.player.gold -= totalMaintenance;
             UI.addLogMessage(
