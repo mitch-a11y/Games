@@ -12,6 +12,20 @@ const GameMap = {
     hoveredCity: null,
     selectedCity: null,
     animFrame: 0,
+    // Zoom & pan state
+    zoom: 1.0,          // 1.0 = fit-to-window
+    minZoom: 1.0,
+    maxZoom: 4.0,
+    panX: 0,            // pan offset in screen pixels
+    panY: 0,
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    panStartX: 0,
+    panStartY: 0,
+    // Touch pinch state
+    lastPinchDist: 0,
+    lastTouchCenter: null,
     // Background map image
     mapImage: null,
     mapImageLoaded: false,
@@ -33,6 +47,96 @@ const GameMap = {
         window.addEventListener('resize', () => { this.resize(); });
         this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
         this.canvas.addEventListener('click', (e) => this.onClick(e));
+
+        // Zoom with mouse wheel
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = this.canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+            this._zoomAt(mx, my, zoomFactor);
+        }, { passive: false });
+
+        // Pan with middle-click or right-click drag, or left-click on empty water
+        this.canvas.addEventListener('mousedown', (e) => {
+            // Right or middle button always pans, left button pans if not on city
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && !this.hoveredCity && this.zoom > 1.01)) {
+                e.preventDefault();
+                this.isDragging = true;
+                this.dragStartX = e.clientX;
+                this.dragStartY = e.clientY;
+                this.panStartX = this.panX;
+                this.panStartY = this.panY;
+                this.canvas.style.cursor = 'grabbing';
+            }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+            this.panX = this.panStartX + (e.clientX - this.dragStartX);
+            this.panY = this.panStartY + (e.clientY - this.dragStartY);
+            this._clampPan();
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                this.canvas.style.cursor = this.hoveredCity ? 'pointer' : 'crosshair';
+            }
+        });
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Touch: pinch-to-zoom and drag-to-pan
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                this.lastPinchDist = this._touchDist(e.touches);
+                this.lastTouchCenter = this._touchCenter(e.touches);
+            } else if (e.touches.length === 1 && this.zoom > 1.01) {
+                this.isDragging = true;
+                this.dragStartX = e.touches[0].clientX;
+                this.dragStartY = e.touches[0].clientY;
+                this.panStartX = this.panX;
+                this.panStartY = this.panY;
+            }
+        }, { passive: false });
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dist = this._touchDist(e.touches);
+                const center = this._touchCenter(e.touches);
+                const rect = this.canvas.getBoundingClientRect();
+                if (this.lastPinchDist > 0) {
+                    const factor = dist / this.lastPinchDist;
+                    this._zoomAt(center.x - rect.left, center.y - rect.top, factor);
+                }
+                if (this.lastTouchCenter) {
+                    this.panX += center.x - this.lastTouchCenter.x;
+                    this.panY += center.y - this.lastTouchCenter.y;
+                    this._clampPan();
+                }
+                this.lastPinchDist = dist;
+                this.lastTouchCenter = center;
+            } else if (e.touches.length === 1 && this.isDragging) {
+                e.preventDefault();
+                this.panX = this.panStartX + (e.touches[0].clientX - this.dragStartX);
+                this.panY = this.panStartY + (e.touches[0].clientY - this.dragStartY);
+                this._clampPan();
+            }
+        }, { passive: false });
+        this.canvas.addEventListener('touchend', (e) => {
+            this.isDragging = false;
+            this.lastPinchDist = 0;
+            this.lastTouchCenter = null;
+        });
+
+        // Double-click to zoom in, shift+double-click to zoom out
+        this.canvas.addEventListener('dblclick', (e) => {
+            if (this.hoveredCity) return; // let city click handle it
+            const rect = this.canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            this._zoomAt(mx, my, e.shiftKey ? 0.5 : 2.0);
+        });
 
         // Load map background image
         this.mapImage = new Image();
@@ -142,24 +246,77 @@ const GameMap = {
         this.height = panel.clientHeight;
         this.canvas.width = this.width;
         this.canvas.height = this.height;
-        this.scaleX = this.width / CONFIG.MAP_WIDTH;
-        this.scaleY = this.height / CONFIG.MAP_HEIGHT;
-        this.scale = Math.min(this.scaleX, this.scaleY);
-        this.offsetX = (this.width - CONFIG.MAP_WIDTH * this.scale) / 2;
-        this.offsetY = (this.height - CONFIG.MAP_HEIGHT * this.scale) / 2;
+        // Base scale: fit the entire map into the panel
+        this.baseScaleX = this.width / CONFIG.MAP_WIDTH;
+        this.baseScaleY = this.height / CONFIG.MAP_HEIGHT;
+        this.baseScale = Math.min(this.baseScaleX, this.baseScaleY);
+        this.baseOffsetX = (this.width - CONFIG.MAP_WIDTH * this.baseScale) / 2;
+        this.baseOffsetY = (this.height - CONFIG.MAP_HEIGHT * this.baseScale) / 2;
+        // Keep combined scale for backward compat (used by city radius etc.)
+        this.scale = this.baseScale * this.zoom;
+        this._clampPan();
+    },
+
+    // Zoom helper methods
+    _zoomAt(screenX, screenY, factor) {
+        const oldZoom = this.zoom;
+        this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom * factor));
+        const actualFactor = this.zoom / oldZoom;
+        // Adjust pan so the point under the cursor stays fixed
+        this.panX = screenX - actualFactor * (screenX - this.panX);
+        this.panY = screenY - actualFactor * (screenY - this.panY);
+        this.scale = this.baseScale * this.zoom;
+        this._clampPan();
+    },
+
+    _clampPan() {
+        const mapW = CONFIG.MAP_WIDTH * this.baseScale * this.zoom;
+        const mapH = CONFIG.MAP_HEIGHT * this.baseScale * this.zoom;
+        // At zoom=1, panX/Y should be 0 (centered)
+        // At higher zoom, allow panning but keep map edges visible
+        const minPanX = this.width - (this.baseOffsetX + mapW);
+        const maxPanX = this.baseOffsetX;
+        const minPanY = this.height - (this.baseOffsetY + mapH);
+        const maxPanY = this.baseOffsetY;
+
+        if (mapW <= this.width) {
+            this.panX = 0; // map fits, center it
+        } else {
+            this.panX = Math.max(minPanX, Math.min(maxPanX, this.panX));
+        }
+        if (mapH <= this.height) {
+            this.panY = 0;
+        } else {
+            this.panY = Math.max(minPanY, Math.min(maxPanY, this.panY));
+        }
+    },
+
+    _touchDist(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    },
+
+    _touchCenter(touches) {
+        return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+        };
     },
 
     worldToScreen(x, y) {
         return {
-            x: x * this.scale + this.offsetX,
-            y: y * this.scale + this.offsetY
+            x: (x * this.baseScale + this.baseOffsetX) * this.zoom + this.panX,
+            y: (y * this.baseScale + this.baseOffsetY) * this.zoom + this.panY
         };
     },
 
     screenToWorld(sx, sy) {
+        const bx = (sx - this.panX) / this.zoom;
+        const by = (sy - this.panY) / this.zoom;
         return {
-            x: (sx - this.offsetX) / this.scale,
-            y: (sy - this.offsetY) / this.scale
+            x: (bx - this.baseOffsetX) / this.baseScale,
+            y: (by - this.baseOffsetY) / this.baseScale
         };
     },
 
@@ -208,6 +365,11 @@ const GameMap = {
 
         // Compass rose
         this.drawCompass(ctx, gameState);
+
+        // Zoom indicator (only when zoomed in)
+        if (this.zoom > 1.05) {
+            this.drawZoomIndicator(ctx);
+        }
     },
 
     // Weather and seasonal tinting overlay
@@ -271,8 +433,9 @@ const GameMap = {
         if (this.mapImageLoaded && this.mapImage) {
             // Draw background image aligned with world coordinates
             const topLeft = this.worldToScreen(0, 0);
-            const mapW = CONFIG.MAP_WIDTH * this.scale;
-            const mapH = CONFIG.MAP_HEIGHT * this.scale;
+            const bottomRight = this.worldToScreen(CONFIG.MAP_WIDTH, CONFIG.MAP_HEIGHT);
+            const mapW = bottomRight.x - topLeft.x;
+            const mapH = bottomRight.y - topLeft.y;
             ctx.drawImage(this.mapImage, topLeft.x, topLeft.y, mapW, mapH);
         } else {
             // Fallback gradient if image not loaded
@@ -292,13 +455,12 @@ const GameMap = {
         this.sparkles.forEach(s => {
             const brightness = (Math.sin(t * s.speed + s.phase) + 1) * 0.5;
             if (brightness > 0.7) {
-                const sx = s.x * this.width;
-                const sy = s.y * this.height;
-                // Much more subtle sparkles for illustrated map
+                // World-space coordinates (sparkles cover the map)
+                const wp = this.worldToScreen(s.x * CONFIG.MAP_WIDTH, s.y * CONFIG.MAP_HEIGHT);
                 ctx.globalAlpha = (brightness - 0.7) * 0.5;
                 ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
-                ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+                ctx.arc(wp.x, wp.y, s.size * this.zoom, 0, Math.PI * 2);
                 ctx.fill();
             }
         });
@@ -449,7 +611,7 @@ const GameMap = {
             ctx.stroke();
 
             // City name with shadow
-            const fontSize = Math.max(10, Math.round(11 * this.scale));
+            const fontSize = Math.min(18, Math.max(10, Math.round(11 * this.scale)));
             ctx.font = `${isSelected ? 'bold ' : ''}${fontSize}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.shadowColor = 'rgba(0,0,0,0.8)';
@@ -872,8 +1034,9 @@ const GameMap = {
             if (gull.x > 1.1) { gull.x = -0.1; gull.y = Math.random() * 0.5; }
             if (gull.y < -0.05 || gull.y > 0.7) { gull.dy = -gull.dy; }
 
-            const sx = gull.x * this.width;
-            const sy = gull.y * this.height;
+            const wp = this.worldToScreen(gull.x * CONFIG.MAP_WIDTH, gull.y * CONFIG.MAP_HEIGHT * 0.85);
+            const sx = wp.x;
+            const sy = wp.y;
             const wing = Math.sin(t * gull.wingSpeed + gull.wingPhase);
             const sz = gull.size;
 
@@ -954,9 +1117,10 @@ const GameMap = {
             cloud.x += cloud.speed;
             if (cloud.x > 1.15) { cloud.x = -0.15; cloud.y = 0.03 + Math.random() * 0.25; }
 
-            const cx = cloud.x * this.width;
-            const cy = cloud.y * this.height;
-            const sc = cloud.scale;
+            const wp = this.worldToScreen(cloud.x * CONFIG.MAP_WIDTH, cloud.y * CONFIG.MAP_HEIGHT);
+            const cx = wp.x;
+            const cy = wp.y;
+            const sc = cloud.scale * this.zoom;
 
             ctx.save();
             ctx.globalAlpha = cloud.opacity;
@@ -1032,7 +1196,62 @@ const GameMap = {
         ctx.fill();
     },
 
+    drawZoomIndicator(ctx) {
+        const x = 12;
+        const y = this.height - 50;
+        const w = 30;
+        const h = 80;
+
+        // Background
+        ctx.fillStyle = 'rgba(20, 35, 60, 0.75)';
+        ctx.strokeStyle = 'rgba(180, 160, 100, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, y - h / 2, w, h, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        // Zoom level text
+        ctx.fillStyle = '#c8c0a8';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${this.zoom.toFixed(1)}x`, x + w / 2, y - h / 2 + 14);
+
+        // Zoom slider track
+        const trackX = x + w / 2;
+        const trackTop = y - h / 2 + 22;
+        const trackBot = y + h / 2 - 18;
+        ctx.strokeStyle = 'rgba(180, 160, 100, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(trackX, trackTop);
+        ctx.lineTo(trackX, trackBot);
+        ctx.stroke();
+
+        // Zoom position dot
+        const zoomPct = (this.zoom - this.minZoom) / (this.maxZoom - this.minZoom);
+        const dotY = trackBot - zoomPct * (trackBot - trackTop);
+        ctx.fillStyle = '#e6a817';
+        ctx.beginPath();
+        ctx.arc(trackX, dotY, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Reset button (─) at bottom
+        ctx.fillStyle = 'rgba(100, 150, 200, 0.6)';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('⟳', x + w / 2, y + h / 2 - 5);
+    },
+
+    // Reset zoom to 1.0
+    resetZoom() {
+        this.zoom = 1.0;
+        this.panX = 0;
+        this.panY = 0;
+        this.scale = this.baseScale * this.zoom;
+    },
+
     onMouseMove(e) {
+        if (this.isDragging) return; // don't update hover while dragging
         const rect = this.canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -1089,6 +1308,22 @@ const GameMap = {
     },
 
     onClick(e) {
+        // Ignore click if we just finished dragging
+        if (this.isDragging) return;
+
+        // Check zoom reset button click
+        if (this.zoom > 1.05) {
+            const rect = this.canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            const resetX = 12;
+            const resetY = this.height - 50;
+            if (mx >= resetX && mx <= resetX + 30 && my >= resetY - 40 && my <= resetY + 40) {
+                this.resetZoom();
+                return;
+            }
+        }
+
         if (this.hoveredCity) {
             this.selectCity(this.hoveredCity);
         }
