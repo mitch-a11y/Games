@@ -7,19 +7,11 @@ const Sound = {
     enabled: true,
     volume: 0.5,
     sfxVolume: 0.6,
-    ambientVolume: 0.3,
-    musicVolume: 0.45,   // Separate music volume (menu + ingame tracks)
-    musicPlaying: false,
+    musicVolume: 0.45,
     buffers: {},      // Loaded audio buffers
     musicBuffers: {}, // Music track buffers (loaded separately)
     loading: false,
     loaded: false,
-    ambientSource: null,
-    ambientGain: null,
-    portAmbientSource: null,
-    portAmbientGain: null,
-    currentAmbient: null,  // 'ocean', 'port', or 'title'
-    titleAmbientNodes: null,  // synth ambient fallback for title screen
 
     // Music system
     menuMusicSource: null,
@@ -47,10 +39,7 @@ const Sound = {
         victory:     'assets/sounds/victory.wav',
         defeat:      'assets/sounds/defeat.wav',
         newgame:     'assets/sounds/newgame.wav',
-        flee:        'assets/sounds/flee.wav',
-        wave_crash:  'assets/sounds/wave_crash.wav',
-        ocean:       'assets/sounds/ocean_ambient.wav',
-        port:        'assets/sounds/port_ambient.wav'
+        flee:        'assets/sounds/flee.wav'
     },
 
     // Music tracks (loaded separately from SFX)
@@ -87,7 +76,6 @@ const Sound = {
                 enabled: this.enabled,
                 volume: this.volume,
                 sfxVolume: this.sfxVolume,
-                ambientVolume: this.ambientVolume,
                 musicVolume: this.musicVolume
             }));
         } catch (e) { /* localStorage not available */ }
@@ -101,7 +89,6 @@ const Sound = {
                 if (typeof s.enabled === 'boolean') this.enabled = s.enabled;
                 if (typeof s.volume === 'number') this.volume = s.volume;
                 if (typeof s.sfxVolume === 'number') this.sfxVolume = s.sfxVolume;
-                if (typeof s.ambientVolume === 'number') this.ambientVolume = s.ambientVolume;
                 if (typeof s.musicVolume === 'number') this.musicVolume = s.musicVolume;
             }
         } catch (e) { /* localStorage not available */ }
@@ -182,23 +169,17 @@ const Sound = {
 
         const buffer = this.musicBuffers.menu;
         if (!buffer) {
-            // Start synth ambient as temporary placeholder
-            this.startTitleAmbient();
-            // Poll every 500ms until the MP3 is loaded
+            // MP3 not loaded yet — poll every 500ms until ready
             this._menuMusicRetryTimer = setInterval(() => {
                 if (this.musicBuffers.menu) {
                     clearInterval(this._menuMusicRetryTimer);
                     this._menuMusicRetryTimer = null;
-                    // Now play the real music (recursive call with buffer available)
-                    this.menuMusicSource = null; // ensure clean state
+                    this.menuMusicSource = null;
                     this.startMenuMusic();
                 }
             }, 500);
             return;
         }
-
-        // Stop synth ambient if it was playing as placeholder
-        this.stopTitleAmbient();
 
         const source = this.ctx.createBufferSource();
         source.buffer = buffer;
@@ -354,7 +335,6 @@ const Sound = {
     stopAllMusic() {
         this.stopMenuMusic();
         this.stopIngameMusic();
-        this.stopTitleAmbient();
     },
 
     setMusicVolume(val) {
@@ -451,247 +431,15 @@ const Sound = {
         }
     },
 
-    // ==========================================
-    // TITLE SCREEN AMBIENT (generative synth pad)
-    // ==========================================
-    startTitleAmbient() {
-        if (!this.enabled || !this.ctx) return;
-        this.resume();
-        if (this.titleAmbientNodes) return; // already playing
-
-        const ctx = this.ctx;
-        const masterGain = ctx.createGain();
-        masterGain.gain.value = 0;
-        masterGain.gain.linearRampToValueAtTime(
-            this.ambientVolume * this.volume * 0.6,
-            ctx.currentTime + 3 // 3 second fade in
-        );
-        masterGain.connect(ctx.destination);
-
-        const nodes = { master: masterGain, sources: [] };
-
-        // Deep drone pad (D2 + A2 — medieval open fifth)
-        const droneFreqs = [73.42, 110.0]; // D2, A2
-        droneFreqs.forEach(freq => {
-            const osc = ctx.createOscillator();
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-
-            const gain = ctx.createGain();
-            gain.gain.value = 0.12;
-
-            // Gentle LFO for movement
-            const lfo = ctx.createOscillator();
-            lfo.type = 'sine';
-            lfo.frequency.value = 0.08 + Math.random() * 0.05;
-            const lfoGain = ctx.createGain();
-            lfoGain.gain.value = 2;
-            lfo.connect(lfoGain);
-            lfoGain.connect(osc.frequency);
-            lfo.start();
-
-            osc.connect(gain);
-            gain.connect(masterGain);
-            osc.start();
-            nodes.sources.push(osc, lfo);
-        });
-
-        // Ethereal high harmonics (very quiet, shimmery)
-        [293.66, 440.0, 587.33].forEach((freq, i) => { // D4, A4, D5
-            const osc = ctx.createOscillator();
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-
-            const gain = ctx.createGain();
-            gain.gain.value = 0.02 - i * 0.005; // decreasing volume
-
-            // Slow amplitude modulation
-            const ampLfo = ctx.createOscillator();
-            ampLfo.type = 'sine';
-            ampLfo.frequency.value = 0.03 + i * 0.02;
-            const ampLfoGain = ctx.createGain();
-            ampLfoGain.gain.value = 0.015;
-            ampLfo.connect(ampLfoGain);
-            ampLfoGain.connect(gain.gain);
-            ampLfo.start();
-
-            osc.connect(gain);
-            gain.connect(masterGain);
-            osc.start();
-            nodes.sources.push(osc, ampLfo);
-        });
-
-        // Filtered brown noise — like wind/waves
-        const bufferSize = ctx.sampleRate * 4;
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = noiseBuffer.getChannelData(0);
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            data[i] = (lastOut + 0.02 * white) / 1.02;
-            lastOut = data[i];
-            data[i] *= 3.5;
-        }
-        const noiseSource = ctx.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-        noiseSource.loop = true;
-
-        const noiseFilter = ctx.createBiquadFilter();
-        noiseFilter.type = 'lowpass';
-        noiseFilter.frequency.value = 150;
-
-        const noiseGain = ctx.createGain();
-        noiseGain.gain.value = 0.06;
-
-        noiseSource.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(masterGain);
-        noiseSource.start();
-        nodes.sources.push(noiseSource);
-
-        this.titleAmbientNodes = nodes;
-    },
-
-    stopTitleAmbient() {
-        if (!this.titleAmbientNodes) return;
-        const { master, sources } = this.titleAmbientNodes;
-
-        // Fade out over 1.5 seconds
-        try {
-            master.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.5);
-            setTimeout(() => {
-                sources.forEach(s => { try { s.stop(); } catch (e) {} });
-                try { master.disconnect(); } catch (e) {}
-            }, 1700);
-        } catch (e) {
-            sources.forEach(s => { try { s.stop(); } catch (e2) {} });
-        }
-        this.titleAmbientNodes = null;
-    },
-
-    // Ambient sound management
-    startAmbient(type = 'ocean') {
-        if (!this.enabled || !this.ctx) return;
-        this.resume();
-
-        // Don't restart if already playing the same type
-        if (this.currentAmbient === type && this.musicPlaying) return;
-
-        // Stop current ambient
-        this.stopAmbient();
-
-        const buffer = this.buffers[type];
-        if (!buffer) {
-            // Fallback to generated noise
-            this._startSynthAmbient();
-            return;
-        }
-
-        this.musicPlaying = true;
-        this.currentAmbient = type;
-
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-
-        const gain = this.ctx.createGain();
-        gain.gain.value = 0; // Start silent
-        gain.gain.linearRampToValueAtTime(
-            this.ambientVolume * this.volume,
-            this.ctx.currentTime + 2  // 2 second fade in
-        );
-
-        source.connect(gain);
-        gain.connect(this.ctx.destination);
-        source.start(0);
-
-        this.ambientSource = source;
-        this.ambientGain = gain;
-    },
-
-    // Switch ambient based on game state
-    updateAmbient(gameState) {
-        if (!this.enabled || !gameState) return;
-
-        // Check if we're in port view or sailing view
-        const selectedCity = typeof GameMap !== 'undefined' ? GameMap.selectedCity : null;
-        const hasDockedShips = gameState.player.ships.some(s => s.status === 'docked');
-        const hasSailingShips = gameState.player.ships.some(s => s.status === 'sailing');
-
-        if (selectedCity && hasDockedShips) {
-            this.startAmbient('port');
-        } else if (hasSailingShips) {
-            this.startAmbient('ocean');
-        } else {
-            this.startAmbient('port');
-        }
-    },
-
-    _startSynthAmbient() {
-        // Fallback brown noise ambient
-        if (this.musicPlaying) return;
-        this.musicPlaying = true;
-        this.currentAmbient = 'synth';
-
-        const bufferSize = this.ctx.sampleRate * 2;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            data[i] = (lastOut + (0.02 * white)) / 1.02;
-            lastOut = data[i];
-            data[i] *= 3.5;
-        }
-
-        this.ambientSource = this.ctx.createBufferSource();
-        this.ambientSource.buffer = buffer;
-        this.ambientSource.loop = true;
-
-        this.ambientGain = this.ctx.createGain();
-        this.ambientGain.gain.value = 0.03 * this.volume;
-
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 200;
-
-        this.ambientSource.connect(filter);
-        filter.connect(this.ambientGain);
-        this.ambientGain.connect(this.ctx.destination);
-        this.ambientSource.start();
-    },
-
-    stopAmbient() {
-        if (this.ambientSource) {
-            if (this.ambientGain) {
-                // Fade out over 1 second
-                try {
-                    this.ambientGain.gain.linearRampToValueAtTime(
-                        0, this.ctx.currentTime + 1
-                    );
-                    setTimeout(() => {
-                        try { this.ambientSource?.stop(); } catch (e) {}
-                        this.ambientSource = null;
-                    }, 1100);
-                } catch (e) {
-                    try { this.ambientSource.stop(); } catch (e2) {}
-                    this.ambientSource = null;
-                }
-            } else {
-                try { this.ambientSource.stop(); } catch (e) {}
-                this.ambientSource = null;
-            }
-        }
-        this.musicPlaying = false;
-        this.currentAmbient = null;
-    },
-
     // Volume controls
     setVolume(val) {
         this.volume = Math.max(0, Math.min(1, val));
-        if (this.ambientGain) {
-            this.ambientGain.gain.value = this.ambientVolume * this.volume;
+        // Update active music gain nodes
+        if (this.menuMusicGain) {
+            this.menuMusicGain.gain.value = this.musicVolume * this.volume;
+        }
+        if (this.ingameMusicGain) {
+            this.ingameMusicGain.gain.value = this.musicVolume * this.volume;
         }
         this.saveSettings();
     },
@@ -701,21 +449,10 @@ const Sound = {
         this.saveSettings();
     },
 
-    setAmbientVolume(val) {
-        this.ambientVolume = Math.max(0, Math.min(1, val));
-        if (this.ambientGain) {
-            this.ambientGain.gain.value = this.ambientVolume * this.volume;
-        }
-        this.saveSettings();
-    },
-
     toggle() {
         this.enabled = !this.enabled;
         if (!this.enabled) {
-            this.stopAmbient();
             this.stopAllMusic();
-        } else {
-            if (this.ctx) this.startAmbient();
         }
         this.saveSettings();
         return this.enabled;

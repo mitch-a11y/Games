@@ -244,10 +244,7 @@ const Game = {
         // Update player rank
         this.checkRankUp();
 
-        // Update ambient sounds (every 10 days)
-        if (this.state.date.day % 10 === 0) {
-            Sound.updateAmbient(this.state);
-        }
+        // (Ambient removed — music system handles background audio)
 
         // Quest daily update
         if (typeof Quests !== 'undefined') {
@@ -533,7 +530,7 @@ const Game = {
     triggerVictory() {
         this.paused = true;
         Sound.play('victory');
-        Sound.stopAmbient();
+        Sound.stopAllMusic();
         const stats = this.getGameStats();
         UI.showGameEndScreen('victory', stats);
     },
@@ -542,7 +539,7 @@ const Game = {
     triggerGameOver(reason) {
         this.paused = true;
         Sound.play('defeat');
-        Sound.stopAmbient();
+        Sound.stopAllMusic();
         const stats = this.getGameStats();
         stats.reason = reason;
         UI.showGameEndScreen('defeat', stats);
@@ -594,7 +591,7 @@ const Game = {
     returnToTitle() {
         this.running = false;
         this.state = null;
-        Sound.stopAmbient();
+        Sound.stopAllMusic();
         document.getElementById('game-screen').classList.remove('active');
         document.getElementById('title-screen').classList.add('active');
         if (typeof Intro !== 'undefined') Intro.startTitle();

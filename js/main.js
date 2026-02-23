@@ -60,7 +60,6 @@
             Intro.phase = 'idle';
             Sound.stopAllMusic();
             showScreen('game-screen');
-            Sound.startAmbient();
             Sound.startIngameMusic();
         } else {
             alert('Kein gespeichertes Spiel gefunden.');
@@ -93,7 +92,6 @@
         Sound.stopAllMusic();
         showScreen('game-screen');
         Game.newGame(playerName, homeCity, difficulty);
-        Sound.startAmbient('port');
         Sound.startIngameMusic();
     });
 

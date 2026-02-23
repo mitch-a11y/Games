@@ -536,8 +536,7 @@ const Intro = {
         const hasLeonardo = !!this.bgImages.menuPanel;
 
         if (hasLeonardo) {
-            // Leonardo image has built-in title + buttons
-            // Hide the HTML title/subtitle/ornament, keep buttons as invisible click zones
+            // Leonardo mode: use extracted button images
             if (titleContent) {
                 titleContent.style.opacity = String(this.menuAlpha);
                 titleContent.classList.add('leonardo-mode');
@@ -545,8 +544,7 @@ const Intro = {
             if (menu) menu.style.opacity = String(this.menuAlpha);
             if (credit) credit.style.opacity = String(this.menuAlpha * 0.4);
 
-            // Dynamically position buttons over the painted buttons in the image
-            // The image is drawn with cover-fit logic — compute actual draw position
+            // Compute actual image draw rectangle (cover-fit, left-aligned)
             const img = this.bgImages.menuPanel;
             const imgRatio = img.width / img.height;
             const screenRatio = w / h;
@@ -557,30 +555,42 @@ const Intro = {
                 drawH = h; drawW = h * imgRatio; drawX = 0; drawY = 0;
             }
 
-            // Button positions relative to the original image (measured from Leonardo image)
-            // First button "Neues Spiel" starts at ~57% height, each ~10.5% apart
-            // X position: ~5% from left edge, width ~14% of image
-            const btnX = drawX + drawW * 0.048;
-            const btnW = drawW * 0.145;
-            const btnStartY = drawY + drawH * 0.565;
-            const btnSpacing = drawH * 0.105;
-            const btnH = drawH * 0.085;
+            // Button source positions in the original 2752x1536 image
+            // Neues Spiel: (280, 740) to (758, 823) -> relative: x=0.1017, y=0.4818, w=0.1738, h=0.0540
+            // Spiel Laden: (260, 898) to (758, 978) -> relative: x=0.0945, y=0.5846, w=0.1810, h=0.0521
+            // Anleitung:   (260, 1056) to (758,1138) -> relative: x=0.0945, y=0.6875, w=0.1810, h=0.0534
+            const btnDefs = [
+                { rx: 0.1017, ry: 0.4818, rw: 0.1738, rh: 0.0540 },
+                { rx: 0.0945, ry: 0.5846, rw: 0.1810, rh: 0.0521 },
+                { rx: 0.0945, ry: 0.6875, rw: 0.1810, rh: 0.0534 },
+            ];
 
-            if (titleContent) {
-                titleContent.style.position = 'absolute';
-                titleContent.style.left = btnX + 'px';
-                titleContent.style.top = btnStartY + 'px';
-                titleContent.style.paddingLeft = '0';
-                titleContent.style.maxWidth = 'none';
-            }
+            // Map button images to button elements
+            const btnImages = [
+                'assets/ui/buttons/btn_neues_spiel.png',
+                'assets/ui/buttons/btn_spiel_laden.png',
+                'assets/ui/buttons/btn_anleitung.png',
+            ];
 
-            // Size each button to match the painted area
             const buttons = menu ? menu.querySelectorAll('.title-btn') : [];
             buttons.forEach((btn, i) => {
-                btn.style.width = btnW + 'px';
-                btn.style.height = btnH + 'px';
+                if (!btnDefs[i]) return;
+                const def = btnDefs[i];
+                const bx = drawX + drawW * def.rx;
+                const by = drawY + drawH * def.ry;
+                const bw = drawW * def.rw;
+                const bh = drawH * def.rh;
+
+                btn.style.position = 'fixed';
+                btn.style.left = bx + 'px';
+                btn.style.top = by + 'px';
+                btn.style.width = bw + 'px';
+                btn.style.height = bh + 'px';
+                btn.style.backgroundImage = `url('${btnImages[i]}')`;
+                btn.style.backgroundSize = '100% 100%';
+                btn.style.backgroundRepeat = 'no-repeat';
                 btn.style.padding = '0';
-                btn.style.marginBottom = (btnSpacing - btnH) + 'px';
+                btn.style.margin = '0';
             });
         } else {
             if (titleContent) {

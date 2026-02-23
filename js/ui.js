@@ -417,7 +417,7 @@ const UI = {
         const totalTraded = Game.state.player.totalTraded || 0;
 
         const sfxPct = Math.round(Sound.sfxVolume * 100);
-        const ambPct = Math.round(Sound.ambientVolume * 100);
+        const musicPct = Math.round(Sound.musicVolume * 100);
         const masterPct = Math.round(Sound.volume * 100);
 
         const html = `<h3>Spielmenue</h3>
@@ -445,9 +445,9 @@ const UI = {
                         <span id="vol-sfx-val" style="min-width:35px;text-align:right;font-size:11px">${sfxPct}%</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;font-size:12px">
-                        <span style="min-width:65px">Ambient</span>
-                        <input type="range" min="0" max="100" value="${ambPct}" style="flex:1;accent-color:var(--gold-color,#c8a84e)" oninput="Sound.setAmbientVolume(this.value/100);document.getElementById('vol-amb-val').textContent=this.value+'%'">
-                        <span id="vol-amb-val" style="min-width:35px;text-align:right;font-size:11px">${ambPct}%</span>
+                        <span style="min-width:65px">Musik</span>
+                        <input type="range" min="0" max="100" value="${musicPct}" style="flex:1;accent-color:var(--gold-color,#c8a84e)" oninput="Sound.setMusicVolume(this.value/100);document.getElementById('vol-music-val').textContent=this.value+'%'">
+                        <span id="vol-music-val" style="min-width:35px;text-align:right;font-size:11px">${musicPct}%</span>
                     </div>
                 </div>
             </div>
