@@ -1,702 +1,640 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HANSE Asset Generator</title>
-<style>
-:root {
-  --bg: #0e0c09; --surface: #1a1610; --surface2: #241e14;
-  --border: #3d3020; --accent: #c8922a; --accent2: #e6b84a;
-  --text: #e8dcc8; --muted: #8a7a5c; --ok: #4a9e6a; --err: #c84a4a;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; padding: 24px; }
-header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
-header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.06em; color: var(--accent2); }
-.badge { font-size: 0.75rem; color: var(--muted); background: var(--surface2); padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); }
-.layout { display: grid; grid-template-columns: 360px 1fr; gap: 24px; align-items: start; }
-.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-.panel h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px; }
-label { display: block; font-size: 0.78rem; color: var(--muted); margin: 12px 0 5px; }
-label:first-of-type { margin-top: 0; }
-input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 0.86rem; font-family: inherit; outline: none; transition: border-color 0.15s; }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
-select option { background: #1a1610; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HANSE Asset Studio</title>
+  <style>
+    :root {
+      --bg: #0e0c09; --surface: #1a1610; --surface2: #241e14; --surface3: #2e2618;
+      --border: #3d3020; --accent: #c8922a; --accent2: #e6b84a;
+      --text: #e8dcc8; --muted: #8a7a5c; --ok: #4a9e6a; --err: #c84a4a; --warn: #c89020;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
 
-/* TABS */
-.tabs { display: flex; gap: 4px; margin-bottom: 20px; }
-.tab { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.83rem; cursor: pointer; transition: all 0.15s; }
-.tab:hover { border-color: var(--accent); color: var(--text); }
-.tab.active { border-color: var(--accent2); background: #2e2210; color: var(--accent2); font-weight: 600; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      position: sticky; top: 0; z-index: 100;
+    }
+    header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.06em; color: var(--accent2); white-space: nowrap; }
+    .api-wrap { display: flex; gap: 8px; flex: 1; min-width: 200px; }
+    .api-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-size: 0.82rem; }
+    .api-input:focus { outline: none; border-color: var(--accent); }
 
-/* SHIP GRID */
-.ship-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.ship-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; transition: all 0.15s; }
-.ship-card:hover { border-color: var(--accent); }
-.ship-card.active { border-color: var(--accent2); background: #2e2210; }
-.ship-card img { width: 100%; height: 70px; object-fit: contain; image-rendering: pixelated; }
-.ship-card span { font-size: 0.72rem; color: var(--muted); display: block; margin-top: 6px; }
-.ship-card.active span { color: var(--accent2); }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 16px; overflow-x: auto; }
+    .tab { padding: 11px 18px; cursor: pointer; font-size: 0.86rem; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
+    .tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+    .tab-content { display: none; padding: 20px 16px; max-width: 980px; margin: 0 auto; }
+    .tab-content.active { display: block; }
 
-/* ANGLE GRID */
-.angle-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
-.angle-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 4px; cursor: pointer; text-align: center; transition: all 0.15s; }
-.angle-btn:hover { border-color: var(--accent); }
-.angle-btn.active { border-color: var(--accent2); background: #2e2210; }
-.angle-btn .dir-icon { font-size: 1.2rem; display: block; }
-.angle-btn .dir-label { font-size: 0.65rem; color: var(--muted); margin-top: 3px; }
-.angle-btn.active .dir-label { color: var(--accent2); }
-.angle-btn.has-asset { border-color: var(--ok); }
-.angle-btn.has-asset .dir-label { color: var(--ok); }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+    .panel-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px; }
 
-/* REFERENCE */
-.ref-preview { width: 100%; height: 120px; background: var(--surface2); border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; cursor: pointer; transition: border-color 0.15s; }
-.ref-preview:hover { border-color: var(--accent); }
-.ref-preview img { width: 100%; height: 100%; object-fit: contain; }
-.ref-preview .placeholder { color: var(--muted); font-size: 0.8rem; text-align: center; line-height: 1.6; }
-.ref-preview input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; }
+    input[type=text], input[type=password], textarea, select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 0.84rem; font-family: inherit; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 72px; }
+    .form-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 12px; }
+    .form-group { margin-bottom: 12px; }
 
-/* STYLE TAGS */
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 0.73rem; cursor: pointer; color: var(--muted); transition: all 0.15s; }
-.tag:hover { border-color: var(--accent); color: var(--text); }
-.tag.on { border-color: var(--accent2); background: #2e2210; color: var(--accent2); }
+    .btn { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.86rem; font-weight: 600; transition: all 0.15s; font-family: inherit; }
+    .btn-primary { background: var(--accent); color: #1a1000; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent2); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .btn-secondary:hover { border-color: var(--accent); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+    .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-/* BUTTONS */
-.btn-primary { width: 100%; padding: 13px; background: linear-gradient(135deg, #b07820, var(--accent2)); border: none; border-radius: 10px; color: #0e0c09; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 16px; }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(200,146,42,0.3); }
-.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
-.btn-sm { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; color: var(--muted); cursor: pointer; transition: all 0.15s; }
-.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.77rem; cursor: pointer; transition: all 0.12s; user-select: none; }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .chip.active { background: var(--accent); border-color: var(--accent); color: #1a1000; font-weight: 600; }
+    .chip.locked { background: rgba(74,158,106,0.15); border-color: var(--ok); color: var(--ok); }
 
-/* PROGRESS */
-.progress { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 12px; display: none; }
-.progress.show { display: block; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.4s; }
+    .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+    .model-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.12s; }
+    .model-card:hover { border-color: var(--accent); }
+    .model-card.active { border-color: var(--accent); background: rgba(200,146,42,0.12); }
+    .model-name { font-size: 0.81rem; font-weight: 600; }
+    .model-desc { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
 
-/* GALLERY */
-.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
-.img-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
-.img-card:hover { border-color: var(--accent); }
-.img-card img { width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--surface2); display: block; }
-.img-meta { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
-.img-meta .name { font-size: 0.7rem; color: var(--muted); }
-.img-actions { display: flex; gap: 5px; }
-.icon-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s; color: var(--text); }
-.icon-btn:hover { border-color: var(--accent); }
-.loader { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
-.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent2); border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loader-text { font-size: 0.72rem; color: var(--muted); }
-.empty { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
-.empty .icon { font-size: 3rem; margin-bottom: 12px; }
+    .class-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .class-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.15s; position: relative; }
+    .class-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .class-card.has-ref { border-color: var(--ok); }
+    .class-thumb { width: 100%; aspect-ratio: 1; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; position: relative; overflow: hidden; }
+    .class-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .class-lock-badge { position: absolute; top: 6px; right: 6px; background: rgba(74,158,106,0.92); color: #fff; border-radius: 4px; font-size: 0.68rem; padding: 2px 6px; }
+    .class-info { padding: 8px 10px; }
+    .class-name { font-size: 0.82rem; font-weight: 600; }
+    .class-status { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+    .class-card.has-ref .class-status { color: var(--ok); }
 
-/* NOTIF */
-.notif { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 0.84rem; max-width: 300px; transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 999; pointer-events: none; }
-.notif.show { transform: translateY(0); opacity: 1; }
-.notif.ok { border-color: var(--ok); }
-.notif.err { border-color: var(--err); }
+    .ref-zone { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .ref-thumb { width: 64px; height: 64px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
+    .ref-zone-info { flex: 1; min-width: 120px; }
+    .ref-zone-title { font-size: 0.8rem; font-weight: 600; color: var(--accent2); }
+    .ref-zone-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
 
-/* SHIP ANGLE STATUS */
-.angle-status { display: grid; grid-template-columns: repeat(8,1fr); gap: 4px; margin-top: 10px; }
-.as-dot { height: 6px; border-radius: 3px; background: var(--border); }
-.as-dot.filled { background: var(--ok); }
-.as-dot.selected { background: var(--accent2); }
+    .slider-wrap { display: flex; align-items: center; gap: 10px; }
+    input[type=range] { flex: 1; accent-color: var(--accent); }
+    .slider-val { min-width: 34px; text-align: right; font-size: 0.84rem; color: var(--accent2); }
+    .slider-hint { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
 
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .progress { height: 5px; background: var(--surface2); border-radius: 3px; margin: 10px 0; overflow: hidden; display: none; }
+    .progress.show { display: block; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width 0.4s ease; width: 0%; }
 
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
-</style>
+    #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .img-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
+    .img-card:hover { border-color: var(--accent); }
+    .img-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: zoom-in; }
+    .img-actions { padding: 6px 8px; display: flex; gap: 4px; align-items: center; border-top: 1px solid var(--border); flex-wrap: nowrap; }
+    .img-label { font-size: 0.7rem; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .icon-btn { background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--muted); transition: color 0.12s; padding: 2px 3px; flex-shrink: 0; }
+    .icon-btn:hover { color: var(--accent2); }
+    .lock-btn { background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 0.7rem; color: var(--muted); padding: 2px 6px; transition: all 0.12s; white-space: nowrap; flex-shrink: 0; }
+    .lock-btn:hover { border-color: var(--ok); color: var(--ok); }
+
+    .loader { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; aspect-ratio: 1; }
+    .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { font-size: 0.72rem; color: var(--muted); text-align: center; padding: 0 8px; }
+    .empty { grid-column: 1/-1; text-align: center; padding: 50px 20px; color: var(--muted); }
+    .empty .icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    .gal-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .gal-count { font-size: 0.8rem; color: var(--muted); }
+    .gal-count span { color: var(--accent2); font-weight: 600; }
+
+    .lock-dropdown { position: relative; display: inline-block; flex-shrink: 0; }
+    .lock-menu { position: absolute; bottom: 110%; right: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; min-width: 170px; z-index: 50; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.6); display: none; }
+    .lock-menu.open { display: block; }
+    .lock-menu-item { padding: 8px 14px; font-size: 0.8rem; cursor: pointer; transition: background 0.1s; }
+    .lock-menu-item:hover { background: var(--surface3); color: var(--ok); }
+
+    #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.93); z-index: 200; align-items: center; justify-content: center; cursor: zoom-out; }
+    #lightbox.show { display: flex; }
+    #lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; }
+
+    .notif { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 18px; font-size: 0.86rem; transition: transform 0.3s; z-index: 999; white-space: nowrap; pointer-events: none; }
+    .notif.show { transform: translateX(-50%) translateY(0); }
+    .notif.ok { border-color: var(--ok); color: var(--ok); }
+    .notif.err { border-color: var(--err); color: var(--err); }
+    .notif.warn { border-color: var(--warn); color: var(--warn); }
+
+    .info-box { background: rgba(200,146,42,0.07); border: 1px solid rgba(200,146,42,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; }
+    .info-box strong { color: var(--accent2); }
+
+    @media (max-width: 600px) {
+      .tab { padding: 9px 12px; font-size: 0.8rem; }
+      .tab-content { padding: 14px 12px; }
+      #gallery { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+      .class-grid { grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); }
+    }
+  </style>
 </head>
 <body>
 
 <header>
-  <span style="font-size:1.4rem">â</span>
-  <h1>HANSE Asset Generator</h1>
-  <span class="badge">Leonardo AI Â· img2img</span>
+  <h1>â HANSE Asset Studio</h1>
+  <div class="api-wrap">
+    <input type="password" class="api-input" id="apiKey" placeholder="Leonardo AI API Key...">
+  </div>
 </header>
 
-<div class="layout">
-  <!-- LEFT PANEL -->
-  <div>
-    <!-- API KEY -->
-    <div class="panel">
-      <h2>API Key</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="password" id="apiKey" placeholder="Leonardo API Key..." value="2413c563-72cd-4db0-b684-84426d196786">
-        <div id="apiDot" style="width:10px;height:10px;border-radius;50%;background:var(--ok);flex-shrink:0"></div>
-      </div>
-    </div>
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('classes')">ð¯ Asset Klassen</div>
+  <div class="tab" onclick="switchTab('generate')">â¡ Generieren</div>
+  <div class="tab" onclick="switchTab('gallery')">ð¼ Galerie (<span id="galCount">0</span>)</div>
+</div>
 
-    <!-- TABS -->
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('ships')">âµ Schiffe</button>
-      <button class="tab" onclick="switchTab('general')">ð¨ Allgemein</button>
-    </div>
-
-    <!-- SHIPS TAB -->
-    <div id="tab-ships" class="tab-content active">
-      <div class="panel">
-        <h2>1 Â· Schiffstyp wÃ¤hlen</h2>
-        <div class="ship-grid" id="shipGrid">
-          <!-- filled by JS -->
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>2 Â· Referenz-Bild</h2>
-        <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">Bestehendes Schiffsbild als Stilvorlage (img2img). Das hÃ¤lt den Stil konsistent.</p>
-        <div class="ref-preview" id="refPreview" onclick="document.getElementById('refFile').click()">
-          <div class="placeholder" id="refPlaceholder">ð Klick zum Hochladen<br><small>oder Schiff oben wÃ¤hlen</small></div>
-          <input type="file" id="refFile" accept="image/*" onchange="loadRefFile(this)" style="display:none">
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn-sm" onclick="useExistingShip()" id="useExistingBtn" style="flex:1" disabled>Bestehendes verwenden</button>
-          <button class="btn-sm" onclick="clearRef()" style="flex:0">â</button>
-        </div>
-
-        <label style="margin-top:14px">Img2Img StÃ¤rke</label>
-        <div style="display:flex;align-items:center;gap:10px">
-          <input type="range" id="imgStrength" min="0.1" max="0.9" step="0.05" value="0.45" style="background:transparent;border:none;padding:0;flex:1;accent-color:var(--accent2)">
-          <span id="strengthVal" style="font-size:0.8rem;color:var(--accent2);min-width:32px">0.45</span>
-        </div>
-        <p style="font-size:0.7rem;color:var(--muted);margin-top:4px">Niedrig = Ã¤hnlicher dem Referenz Â· Hoch = mehr KI-KreativitÃ¤t</p>
-      </div>
-
-      <div class="panel">
-        <h2>3 Â· Winkel / Richtungen</h2>
-        <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">8 Richtungen (0-7) fÃ¼r die Kartenansicht. WÃ¤hle die die du generieren willst.</p>
-        <div class="angle-grid" id="angleGrid">
-          <!-- filled by JS -->
-        </div>
-        <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn-sm" onclick="selectAllAngles()" style="flex:1">Alle wÃ¤hlen</button>
-          <button class="btn-sm" onclick="selectCardinalAngles()" style="flex:1">Kardinal (4)</button>
-          <button class="btn-sm" onclick="clearAngles()" style="flex:1">Leeren</button>
-        </div>
-        <!-- Progress dots for existing files -->
-        <div style="margin-top:12px">
-          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:5px">Existierende Dateien:</div>
-          <div class="angle-status" id="angleStatus">
-            <!-- filled by JS -->
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>4 Â· Prompt & Stil</h2>
-        <label>Zusatz-Prompt (optional)</label>
-        <textarea id="shipPrompt" rows="2" placeholder="z.B. 'blue hull, weathered wood, rough sea'"></textarea>
-        <label>Stil</label>
-        <div class="tags" id="shipTags">
-          <span class="tag on" data-t="detailed game sprite">Game Sprite</span>
-          <span class="tag on" data-t="transparent background, isolated">Transparent</span>
-          <span class="tag on" data-t="medieval hanseatic 15th century">Hanseatisch</span>
-          <span class="tag" data-t="pixel art 16bit">Pixel Art</span>
-          <span class="tag" data-t="oil painting texture">Ã¶lgemÃ¤lde</span>
-          <span class="tag" data-t="pencil sketch outline">Sketch</span>
-        </div>
-        <div class="row2" style="margin-top:12px">
-          <div>
-            <label>GrÃ¶Ãe</label>
-            <select id="shipSize">
-              <option value="512x512" selected>512Ã512</option>
-              <option value="768x768">768Ã768</option>
-              <option value="1024x1024">1024Ã1024</option>
-            </select>
-          </div>
-          <div>
-            <label>Modell</label>
-            <select id="shipModel">
-              <option value="b24e16ff-06e3-43eb-8d33-4416c2d75876" selected>Leonardo Diffusion XL</option>
-              <option value="6bef9f1b-29cb-40c7-b9df-32b51c1f67d3">Leonardo Creative</option>
-              <option value="5c232a9e-9061-4777-980a-ddc8e65647c6">DreamShaper v7</option>
-              <option value="aa77f04e-3eec-4034-9c07-d0f619684628">Kino XL</option>
-            </select>
-          </div>
-        </div>
-        <div class="progress" id="shipProgress"><div class="progress-fill" id="shipFill"></div></div>
-        <button class="btn-primary" id="shipGenBtn" onclick="generateShipAngles()">â¡ Winkel generieren</button>
-      </div>
-    </div>
-
-    <!-- GENERAL TAB -->
-    <div id="tab-general" class="tab-content">
-      <div class="panel">
-        <h2>Kategorie</h2>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button class="ship-card" onclick="setGenCat(this,'cities')" style="padding:12px">ð°<br><small>StÃ¤dte</small></button>
-          <button class="ship-card" onclick="setGenCat(this,'goods')" style="padding:12px">ð¦<br><small>Waren</small></button>
-          <button class="ship-card" onclick="setGenCat(this,'ui')" style="padding:12px">ð¨<br><small>UI-Elemente</small></button>
-          <button class="ship-card" onclick="setGenCat(this,'backgrounds')" style="padding:12px">ð<br><small>HintergrÃ¼nde</small></button>
-          <button class="ship-card" onclick="setGenCat(this,'characters')" style="padding:12px">ð§<br><small>Charaktere</small></button>
-          <button class="ship-card active" onclick="setGenCat(this,'custom')" style="padding:12px">âï¸<br><small>Eigener</small></button>
-        </div>
-      </div>
-      <div class="panel">
-        <h2>Prompt</h2>
-        <textarea id="genPrompt" rows="3" placeholder="Beschreibe das Asset..."></textarea>
-        <label>Stil-Tags</label>
-        <div class="tags" id="genTags">
-          <span class="tag on" data-t="medieval hanseatic style">Hanseatisch</span>
-          <span class="tag on" data-t="detailed illustration">Detailliert</span>
-          <span class="tag" data-t="transparent background">Transparent</span>
-          <span class="tag" data-t="pixel art">Pixel Art</span>
-          <span class="tag" data-t="oil painting">ÃlgemÃ¤lde</span>
-          <span class="tag" data-t="isometric">Isometrisch</span>
-          <span class="tag" data-t="top down view">Top-Down</span>
-          <span class="tag" data-t="sepia aged paper">Sepia</span>
-        </div>
-        <div class="row2" style="margin-top:12px">
-          <div><label>Format</label>
-            <select id="genSize">
-              <option value="512x512">512Ã512</option>
-              <option value="768x512">768Ã512</option>
-              <option value="512x768">512Ã768</option>
-              <option value="1024x1024">1024Ã1024</option>
-            </select>
-          </div>
-          <div><label>Anzahl</label>
-            <select id="genCount">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="4" selected>4</option>
-            </select>
-          </div>
-        </div>
-        <div class="row2" style="margin-top:8px">
-          <div><label>Modell</label>
-            <select id="genModel">
-              <option value="b24e16ff-06e3-43eb-8d33-4416c2d75876" selected>Diffusion XL</option>
-              <option value="6bef9f1b-29cb-40c7-b9df-32b51c1f67d3">Creative</option>
-              <option value="5c232a9e-9061-4777-980a-ddc8e65647c6">DreamShaper v7</option>
-            </select>
-          </div>
-        </div>
-        <div class="progress" id="genProgress"><div class="progress-fill" id="genFill"></div></div>
-        <button class="btn-primary" id="genBtn" onclick="generateGeneral()">â¡ Generieren</button>
-      </div>
-    </div>
+<!-- ââ TAB: ASSET KLASSEN ââ -->
+<div class="tab-content active" id="tab-classes">
+  <div class="info-box">
+    <strong>Flow:</strong> Generiere Assets frei â klick ð auf ein Bild in der Galerie â setze es als Stil-Referenz fÃ¼r eine Klasse â ab dann nutzt diese Klasse das Bild automatisch als img2img-Basis fÃ¼r konsistenten Look.
   </div>
-
-  <!-- RIGHT: GALLERY -->
-  <div>
-    <div class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h2>Generierte Assets <span style="background:var(--accent);color:#0e0c09;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px" id="galCount">0</span></h2>
-        <div style="display:flex;gap:8px">
-          <button class="btn-sm" onclick="downloadAll()">â¬ Alle laden</button>
-          <button class="btn-sm" onclick="clearGallery()">ð Leeren</button>
-        </div>
-      </div>
-      <div class="gallery" id="gallery">
-        <div class="empty"><div class="icon">â</div><p>Schiffstyp wÃ¤hlen â Referenz setzen â Winkel wÃ¤hlen â Generieren</p></div>
-      </div>
+  <div class="panel">
+    <div class="panel-title">Asset Klassen fÃ¼r HANSE</div>
+    <div class="class-grid" id="classGrid"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-sm" onclick="addCustomClass()">+ Eigene Klasse hinzufÃ¼gen</button>
     </div>
   </div>
 </div>
 
+<!-- ââ TAB: GENERIEREN ââ -->
+<div class="tab-content" id="tab-generate">
+
+  <div class="panel">
+    <div class="panel-title">FÃ¼r welche Klasse?</div>
+    <div class="chip-group" id="genClassChips"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Prompt</div>
+    <div class="form-group">
+      <textarea id="genPrompt" rows="3" placeholder="Beschreibe was generiert werden soll..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Stil-Tags</label>
+      <div class="chip-group" id="styleTagChips"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="refPanel">
+    <div class="panel-title">ð Stil-Referenz (img2img)</div>
+    <div id="refZoneContent"></div>
+    <div id="strengthGroup" style="display:none;margin-top:12px">
+      <label>Referenz-StÃ¤rke</label>
+      <div class="slider-wrap">
+        <input type="range" id="refStrength" min="0.05" max="0.7" step="0.05" value="0.25"
+               oninput="document.getElementById('refStrengthVal').textContent=this.value">
+        <span class="slider-val" id="refStrengthVal">0.25</span>
+      </div>
+      <div class="slider-hint"><span>â Stil stark Ã¼bernehmen</span><span>mehr Variation â</span></div>
+    </div>
+    <div style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="useRef" style="width:auto">
+        <span style="font-size:0.82rem;color:var(--text)">Referenz fÃ¼r diese Generierung verwenden</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">KI-Modell</div>
+    <div class="model-grid" id="genModelGrid"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Einstellungen</div>
+    <div class="form-row">
+      <div>
+        <label>Anzahl</label>
+        <select id="genCount">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+        </select>
+      </div>
+      <div>
+        <label>GrÃ¶Ãe</label>
+        <select id="genSize">
+          <option value="512x512">512 Ã 512</option>
+          <option value="768x768" selected>768 Ã 768</option>
+          <option value="1024x1024">1024 Ã 1024</option>
+          <option value="768x512">768 Ã 512 (Quer)</option>
+          <option value="512x768">512 Ã 768 (Hoch)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="genBtn" onclick="generate()" style="width:100%;padding:12px;font-size:0.95rem">â¡ Generieren</button>
+  <div class="progress" id="genProgress"><div class="progress-fill" id="genFill"></div></div>
+  <div id="genStatus" style="font-size:0.78rem;color:var(--muted);margin-top:6px;text-align:center"></div>
+
+</div>
+
+<!-- ââ TAB: GALERIE ââ -->
+<div class="tab-content" id="tab-gallery">
+  <div class="gal-header">
+    <div class="gal-count">Generiert: <span id="galCountBig">0</span></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-sm" onclick="downloadAll()">â¬ Alle</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearGallery()">ð Leeren</button>
+    </div>
+  </div>
+  <div id="gallery">
+    <div class="empty"><div class="icon">â</div><p>Noch keine Assets generiert</p></div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<!-- NOTIF -->
 <div class="notif" id="notif"></div>
 
 <script>
-// ââ CONFIG ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ CONSTANTS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const API = 'https://cloud.leonardo.ai/api/rest/v1';
-const NEG = 'blurry, low quality, watermark, text, signature, modern, futuristic, distorted';
-const STYLE_BASE = '15th century Baltic hanseatic era, high quality game art';
+const NEG = 'blurry, low quality, distorted, deformed, watermark, text, signature, bad anatomy, duplicate, cropped, jpeg artifacts';
+const REFS_KEY = 'hanse_class_refs_v2';
 
-const SHIPS = [
-  { id: 'cog',       name: 'Kogge',      file: 'assets/ship_cog.png' },
-  { id: 'small_cog', name: 'Kleine K.',  file: 'assets/ship_small_cog.png' },
-  { id: 'caravel',   name: 'Karavelle',  file: 'assets/ship_caravel.png' },
-  { id: 'carrack',   name: 'Karracke',   file: 'assets/ship_carrack.png' },
-  { id: 'hulk',      name: 'Hulk',       file: 'assets/ship_hulk.png' },
-  { id: 'boat',      name: 'Boot',       file: 'assets/ship_boat.png' },
+const MODELS = [
+  { id: 'b24e16ff-06e3-43eb-8d33-4416c2d75876', name: 'Phoenix',       desc: 'Top QualitÃ¤t & Stil' },
+  { id: '6bef9f1b-29cb-40c7-b9df-32b51c1f67d3', name: 'Diffusion XL', desc: 'Vielseitig' },
+  { id: 'aa77f04e-3eec-4034-9c07-d0f619684628', name: 'Lightning XL',  desc: 'Schnell' },
+  { id: '1e60896f-3c26-4296-8ecc-53e2afecc132', name: 'Kino XL',       desc: 'Cinematisch' },
+  { id: 'e316348f-7773-490e-adcd-46757c738eb9', name: 'Abs. Reality',  desc: 'Realistisch' },
+  { id: 'd69c8273-6b17-4a30-a13e-d6637ae1c644', name: 'DreamShaper 7', desc: 'Fantasy/Illust.' },
 ];
 
-const DIRS = [
-  { idx: 0, label: 'N',  icon: 'â¬' },
-  { idx: 1, label: 'NE', icon: 'â' },
-  { idx: 2, label: 'E',  icon: 'â¡' },
-  { idx: 3, label: 'SE', icon: 'â' },
-  { idx: 4, label: 'S',  icon: 'â¬' },
-  { idx: 5, label: 'SW', icon: 'â' },
-  { idx: 6, label: 'W',  icon: 'â¬' },
-  { idx: 7, label: 'NW', icon: 'â' },
+const DEFAULT_CLASSES = [
+  { id: 'ships',   name: 'Schiffe',    icon: 'â', prompt: 'hanseatic medieval wooden sailing cog ship, side view, detailed, game sprite, transparent background, isolated' },
+  { id: 'harbor',  name: 'Hafen',      icon: 'ð', prompt: 'medieval hanseatic harbor, wooden warehouse, merchant dock building, isometric game asset, detailed' },
+  { id: 'items',   name: 'Items',      icon: 'âï¸', prompt: 'medieval trading item, cargo goods, weapon or tool, game asset icon, isolated on transparent background' },
+  { id: 'cards',   name: 'Karten',     icon: 'ð', prompt: 'medieval trading card artwork, hanseatic theme, ornate parchment border, detailed illustration, card art' },
+  { id: 'ui',      name: 'UI / MenÃ¼s', icon: 'ð', prompt: 'medieval fantasy game UI element, parchment frame, wooden panel, decorative border, HUD element' },
+  { id: 'chars',   name: 'Charaktere', icon: 'ð§', prompt: 'medieval hanseatic merchant character portrait, detailed face, game RPG character art, waist up' },
+  { id: 'terrain', name: 'Terrain',    icon: 'ðº', prompt: 'medieval map terrain tile, coastal sea and harbor, top-down 2D isometric game tile' },
+  { id: 'effects', name: 'Effekte',    icon: 'â¨', prompt: 'medieval game visual effect, wind or lightning or water particle effect, transparent background, clean edges' },
 ];
 
-const ANGLE_PROMPTS = {
-  0: 'sailing ship facing directly upward from below, top-down slight angle, bow pointing up',
-  1: 'sailing ship facing northeast, 45 degree angle, three-quarter view from front-right',
-  2: 'sailing ship facing right, direct side profile view, starboard side visible',
-  3: 'sailing ship facing southeast, 45 degree angle, three-quarter view from rear-right',
-  4: 'sailing ship facing directly down, seen from above, stern pointing down',
-  5: 'sailing ship facing southwest, 45 degree angle, three-quarter view from rear-left',
-  6: 'sailing ship facing left, direct side profile view, port side visible, mirrored',
-  7: 'sailing ship facing northwest, 45 degree angle, three-quarter view from front-left',
-};
+const STYLE_TAGS = [
+  'medieval illustration', 'hand-painted', 'detailed', 'stylized',
+  'painterly', 'watercolor', 'pixel art', 'concept art',
+  'transparent background', 'game asset', 'high resolution', 'flat shading',
+];
 
-const CAT_PROMPTS = {
-  cities: 'medieval hanseatic city, half-timbered buildings, church tower, market square',
-  goods: 'medieval trade goods, barrels cloth salt fish amber, detailed items',
-  ui: 'medieval game UI element, parchment wood decorative border',
-  backgrounds: 'Baltic Sea coastline medieval harbor atmospheric wide angle',
-  characters: 'medieval merchant hanseatic trader portrait period clothing',
-  custom: '',
-};
-
-// ââ STATE âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-let selectedShip = null;
-let refImageId = null;
-let refDataUrl = null;
-let selectedAngles = new Set([2, 6]); // E and W by default
-let activeTabs_ship = new Set(['detailed game sprite', 'transparent background, isolated', 'medieval hanseatic 15th century']);
-let activeTabs_gen = new Set(['medieval hanseatic style', 'detailed illustration']);
-let genCat = 'custom';
+// âââ STATE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+let classRefs = {};
+let allClasses = [];
+let selectedClassId = 'ships';
+let selectedModelId = MODELS[0].id;
+let activeStyleTags = new Set(['medieval illustration', 'game asset']);
 let galleryCount = 0;
 
-// ââ INIT ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ INIT ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function init() {
-  // Ship grid
-  const sg = document.getElementById('shipGrid');
-  SHIPS.forEach(s => {
+  loadData();
+  buildClassGrid();
+  buildGenClassChips();
+  buildStyleTagChips();
+  buildModelGrid();
+  refreshRefPanel();
+}
+
+function loadData() {
+  classRefs = {};
+  allClasses = [...DEFAULT_CLASSES];
+  try {
+    const stored = localStorage.getItem(REFS_KEY);
+    if (stored) {
+      const data = JSON.parse(stored);
+      classRefs = data.refs || {};
+      // restore custom classes
+      if (data.customClasses) {
+        data.customClasses.forEach(c => {
+          if (!allClasses.find(x => x.id === c.id)) allClasses.push(c);
+        });
+      }
+    }
+  } catch(e) {}
+}
+
+function saveData() {
+  const customClasses = allClasses.filter(c => !DEFAULT_CLASSES.find(d => d.id === c.id));
+  localStorage.setItem(REFS_KEY, JSON.stringify({ refs: classRefs, customClasses }));
+}
+
+// âââ CLASS GRID ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function buildClassGrid() {
+  const grid = document.getElementById('classGrid');
+  grid.innerHTML = '';
+  allClasses.forEach(cls => {
+    const ref = classRefs[cls.id];
     const card = document.createElement('div');
-    card.className = 'ship-card';
-    card.dataset.id = s.id;
+    card.className = 'class-card' + (ref ? ' has-ref' : '');
     card.innerHTML = `
-      <img src="../../${s.file}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%2248%22 font-size=%2248%22>âµ</text></svg>'">
-      <span>${s.name}</span>
-    `;
-    card.onclick = () => selectShip(s, card);
-    sg.appendChild(card);
+      <div class="class-thumb">
+        ${ref
+          ? `<img src="${ref.url}" alt="${cls.name}" loading="lazy" onerror="this.parentElement.innerHTML='${cls.icon}'">
+             <span class="class-lock-badge">ð</span>`
+          : cls.icon}
+      </div>
+      <div class="class-info">
+        <div class="class-name">${cls.icon} ${cls.name}</div>
+        <div class="class-status">${ref ? 'ð¢ Referenz aktiv' : 'â Keine Referenz'}</div>
+      </div>`;
+    card.addEventListener('click', () => goGenerate(cls.id));
+    grid.appendChild(card);
   });
-
-  // Angle grid
-  const ag = document.getElementById('angleGrid');
-  const as = document.getElementById('angleStatus');
-  DIRS.forEach(d => {
-    const btn = document.createElement('div');
-    btn.className = 'angle-btn' + (selectedAngles.has(d.idx) ? ' active' : '');
-    btn.dataset.idx = d.idx;
-    btn.innerHTML = `<span class="dir-icon">${d.icon}</span><span class="dir-label">${d.label}</span>`;
-    btn.onclick = () => toggleAngle(d.idx, btn);
-    ag.appendChild(btn);
-
-    const dot = document.createElement('div');
-    dot.className = 'as-dot';
-    dot.id = `dot-${d.idx}`;
-    as.appendChild(dot);
-  });
-
-  // Tag listeners
-  document.querySelectorAll('#shipTags .tag').forEach(t => {
-    t.classList.toggle('on', activeTabs_ship.has(t.dataset.t));
-    t.onclick = () => { t.classList.toggle('on'); activeTabs_ship[t.classList.contains('on') ? 'add' : 'delete'](t.dataset.t); };
-  });
-  document.querySelectorAll('#genTags .tag').forEach(t => {
-    t.classList.toggle('on', activeTabs_gen.has(t.dataset.t));
-    t.onclick = () => { t.classList.toggle('on'); activeTabs_gen[t.classList.contains('on') ? 'add' : 'delete'](t.dataset.t); };
-  });
-
-  // Strength slider
-  document.getElementById('imgStrength').oninput = e => {
-    document.getElementById('strengthVal').textContent = parseFloat(e.target.value).toFixed(2);
-  };
-
-  // API key dot
-  document.getElementById('apiKey').oninput = e => {
-    document.getElementById('apiDot').style.background = e.target.value.trim() ? 'var(--ok)' : 'var(--err)';
-  };
 }
 
-// ââ SHIP SELECTION ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function selectShip(ship, card) {
-  selectedShip = ship;
-  document.querySelectorAll('.ship-card').forEach(c => c.classList.remove('active'));
-  card.classList.add('active');
-  document.getElementById('useExistingBtn').disabled = false;
-
-  // Update existing file status dots
-  updateAngleDots();
+function goGenerate(classId) {
+  selectedClassId = classId;
+  const cls = allClasses.find(c => c.id === classId);
+  if (cls) document.getElementById('genPrompt').value = cls.prompt;
+  updateGenClassChips();
+  refreshRefPanel();
+  switchTab('generate');
 }
 
-function updateAngleDots() {
-  if (!selectedShip) return;
-  // We can't check the actual FS from browser - just show all as unknown
-  // In real use these would be checked server-side
-  document.querySelectorAll('.as-dot').forEach(d => d.classList.remove('filled'));
+function addCustomClass() {
+  const name = prompt('Name der neuen Klasse:');
+  if (!name || !name.trim()) return;
+  const icon = prompt('Emoji Icon (optional):', 'ð¦') || 'ð¦'';
+  const basePrompt = prompt('Basis-Prompt:', 'medieval game asset, detailed, isolated') || 'medieval game asset';
+  const id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
+  allClasses.push({ id, name: name.trim(), icon, prompt: basePrompt });
+  saveData();
+  buildClassGrid();
+  buildGenClassChips();
+  notify(`Klasse "${name.trim()}" hinzugefÃ¼gt`, 'ok');
 }
 
-// ââ ANGLE CONTROLS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function toggleAngle(idx, btn) {
-  if (selectedAngles.has(idx)) {
-    selectedAngles.delete(idx);
-    btn.classList.remove('active');
+// âââ GEN CLASS CHIPS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function buildGenClassChips() {
+  const container = document.getElementById('genClassChips');
+  container.innerHTML = '';
+  allClasses.forEach(cls => {
+    const chip = document.createElement('div');
+    const hasRef = !!classRefs[cls.id];
+    chip.className = 'chip' + (cls.id === selectedClassId ? ' active' : '') + (hasRef ? ' locked' : '');
+    chip.textContent = (hasRef ? 'ð ' : '') + cls.icon + ' ' + cls.name;
+    chip.dataset.id = cls.id;
+    chip.addEventListener('click', () => {
+      selectedClassId = cls.id;
+      const c = allClasses.find(x => x.id === cls.id);
+      if (c) document.getElementById('genPrompt').value = c.prompt;
+      updateGenClassChips();
+      refreshRefPanel();
+    });
+    container.appendChild(chip);
+  });
+}
+
+function updateGenClassChips() {
+  document.querySelectorAll('#genClassChips .chip').forEach(chip => {
+    const cls = allClasses.find(c => c.id === chip.dataset.id);
+    if (!cls) return;
+    const hasRef = !!classRefs[cls.id];
+    chip.className = 'chip' + (chip.dataset.id === selectedClassId ? ' active' : '') + (hasRef ? ' locked' : '');
+    chip.textContent = (hasRef ? 'ð ' : '') + cls.icon + ' ' + cls.name;
+  });
+}
+
+// âââ STYLE TAGS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function buildStyleTagChips() {
+  const container = document.getElementById('styleTagChips');
+  container.innerHTML = '';
+  STYLE_TAGS.forEach(tag => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (activeStyleTags.has(tag) ? ' active' : '');
+    chip.textContent = tag;
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      if (chip.classList.contains('active')) activeStyleTags.add(tag);
+      else activeStyleTags.delete(tag);
+    });
+    container.appendChild(chip);
+  });
+}
+
+// âââ MODEL GRID ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function buildModelGrid() {
+  const grid = document.getElementById('genModelGrid');
+  grid.innerHTML = '';
+  MODELS.forEach((model, i) => {
+    const card = document.createElement('div');
+    card.className = 'model-card' + (i === 0 ? ' active' : '');
+    card.innerHTML = `<div class="model-name">${model.name}</div><div class="model-desc">${model.desc}</div>`;
+    card.addEventListener('click', () => {
+      grid.querySelectorAll('.model-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      selectedModelId = model.id;
+    });
+    grid.appendChild(card);
+  });
+}
+
+// âââ REF PANEL âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function refreshRefPanel() {
+  const ref = classRefs[selectedClassId];
+  const cls = allClasses.find(c => c.id === selectedClassId);
+  const content = document.getElementById('refZoneContent');
+  const strengthGroup = document.getElementById('strengthGroup');
+  const useRefCheck = document.getElementById('useRef');
+
+  if (ref) {
+    content.innerHTML = `
+      <div class="ref-zone">
+        <img class="ref-thumb" src="${ref.url}" alt="Referenz" onerror="this.style.display='none'">
+        <div class="ref-zone-info">
+          <div class="ref-zone-title">ð ${cls ? cls.name : ''} â Referenz aktiv</div>
+          <div class="ref-zone-sub">Gesetzt: ${new Date(ref.lockedAt).toLocaleString('de-DE')}</div>
+          ${ref.label ? `<div class="ref-zone-sub" style="margin-top:2px">${ref.label}</div>` : ''}
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="clearRef('${selectedClassId}')">ð Entfernen</button>
+      </div>`;
+    strengthGroup.style.display = 'block';
+    useRefCheck.checked = true;
   } else {
-    selectedAngles.add(idx);
-    btn.classList.add('active');
+    content.innerHTML = `<div style="font-size:0.82rem;color:var(--muted)">Noch keine Referenz fÃ¼r <strong style="color:var(--text)">${cls ? cls.name : 'diese Klasse'}</strong> gesetzt.<br><br>Generiere Bilder â klick ð in der Galerie â setze das beste als Referenz. Dann nutzen alle zukÃ¼nftigen Generierungen dieser Klasse dieses Bild als img2img-Stilvorlage.</div>`;
+    strengthGroup.style.display = 'none';
+    useRefCheck.checked = false;
   }
 }
-function selectAllAngles() {
-  DIRS.forEach(d => { selectedAngles.add(d.idx); document.querySelector(`.angle-btn[data-idx="${d.idx}"]`).classList.add('active'); });
-}
-function selectCardinalAngles() {
-  clearAngles();
-  [0, 2, 4, 6].forEach(idx => { selectedAngles.add(idx); document.querySelector(`.angle-btn[data-idx="${idx}"]`).classList.add('active'); });
-}
-function clearAngles() {
-  selectedAngles.clear();
-  document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
-}
 
-// ââ REFERENCE IMAGE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function useExistingShip() {
-  if (!selectedShip) return;
-  // Load the ship image from the repo path as reference
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width || 256;
-    canvas.height = img.height || 256;
-    canvas.getContext('2d').drawImage(img, 0, 0);
-    refDataUrl = canvas.toDataURL('image/png');
-    showRefPreview(refDataUrl);
-    notify(`Referenz gesetzt: ${selectedShip.name}`, 'ok');
-  };
-  img.onerror = () => notify('Bild nicht ladbar â bitte manuell hochladen', 'err');
-  img.src = `../../${selectedShip.file}?t=${Date.now()}`;
+// âââ CLASS REFS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function setRef(classId, url, label) {
+  classRefs[classId] = { url, label: label || '', lockedAt: new Date().toISOString() };
+  saveData();
+  buildClassGrid();
+  updateGenClassChips();
+  if (selectedClassId === classId) refreshRefPanel();
+  const cls = allClasses.find(c => c.id === classId);
+  notify(`ð Als ${cls ? cls.name : classId}-Referenz gesetzt â`, 'ok');
 }
 
-function loadRefFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { refDataUrl = e.target.result; showRefPreview(refDataUrl); notify('Referenz geladen â', 'ok'); };
-  reader.readAsDataURL(file);
+function clearRef(classId) {
+  delete classRefs[classId];
+  saveData();
+  buildClassGrid();
+  updateGenClassChips();
+  refreshRefPanel();
+  notify('Referenz entfernt', 'warn');
 }
 
-function showRefPreview(dataUrl) {
-  const prev = document.getElementById('refPreview');
-  document.getElementById('refPlaceholder').style.display = 'none';
-  let img = prev.querySelector('img.ref-img');
-  if (!img) { img = document.createElement('img'); img.className = 'ref-img'; prev.insertBefore(img, prev.firstChild); }
-  img.src = dataUrl;
-}
+// âââ IMAGE UPLOAD (for img2img) ââââââââââââââââââââââââââââââââââââââââââââââ
+async function uploadImageFromUrl(imageUrl, apiKey) {
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error('Referenzbild konnte nicht geladen werden');
+  const blob = await imgRes.blob();
+  const ext = blob.type.includes('png') ? 'png' : 'jpg';
 
-function clearRef() {
-  refDataUrl = null;
-  refImageId = null;
-  const prev = document.getElementById('refPreview');
-  const img = prev.querySelector('img.ref-img');
-  if (img) img.remove();
-  document.getElementById('refPlaceholder').style.display = '';
-}
-
-// ââ UPLOAD REFERENCE TO LEONARDO ââââââââââââââââââââââââââââââââââââââââââââ
-async function uploadReference(apiKey) {
-  if (!refDataUrl) return null;
-
-  // Convert dataURL to blob
-  const res = await fetch(refDataUrl);
-  const blob = await res.blob();
-
-  // Get presigned URL from Leonardo
   const initRes = await fetch(`${API}/init-image`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({ extension: 'png' })
+    body: JSON.stringify({ extension: ext })
   });
-  if (!initRes.ok) { console.warn('Init image failed'); return null; }
-  const initData = await initRes.json();
-  const { url, fields, id } = initData.uploadInitImage;
+  if (!initRes.ok) throw new Error(`Init-Image HTTP ${initRes.status}`);
+  const data = await initRes.json();
+  const { id, fields, url } = data.uploadInitImage;
 
-  // Upload to S3
   const form = new FormData();
-  Object.entries(fields).forEach(([k, v]) => form.append(k, v));
-  form.append('file', blob, 'reference.png');
-  await fetch(url, { method: 'POST', body: form });
+  Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
+  form.append('file', blob);
+  const uploadRes = await fetch(url, { method: 'POST', body: form });
+  if (!uploadRes.ok && uploadRes.status !== 204) throw new Error('S3 Upload fehlgeschlagen');
 
   return id;
 }
 
-// ââ GENERATE SHIP ANGLES âââââââââââââââââââââââââââââââââââââââââââââââââââââ
-async function generateShipAngles() {
+// âââ GENERATE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+async function generate() {
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) { notify('API Key fehlt!', 'err'); return; }
-  if (!selectedShip) { notify('Schiff wÃ¤hlen!', 'err'); return; }
-  if (selectedAngles.size === 0) { notify('Mindestens einen Winkel wÃ¤hlen!', 'err'); return; }
+  const promptText = document.getElementById('genPrompt').value.trim();
+  if (!promptText) { notify('Prompt eingeben!', 'err'); return; }
 
-  const btn = document.getElementById('shipGenBtn');
-  btn.disabled = true;
-  const progress = document.getElementById('shipProgress');
-  const fill = document.getElementById('shipFill');
-  progress.classList.add('show');
-  fill.style.width = '5%';
-
-  let uploadedRefId = null;
-  if (refDataUrl) {
-    btn.textContent = 'â³ Lade Referenz hoch...';
-    try {
-      uploadedRefId = await uploadReference(apiKey);
-      fill.style.width = '15%';
-      if (uploadedRefId) notify('Referenz hochgeladen â', 'ok');
-    } catch(e) { console.warn('Ref upload failed:', e); }
-  }
-
-  const angles = [...selectedAngles].sort((a, b) => a - b);
-  const [w, h] = document.getElementById('shipSize').value.split('x').map(Number);
-  const model = document.getElementById('shipModel').value;
-  const extraPrompt = document.getElementById('shipPrompt').value.trim();
-  const tags = [...activeTabs_ship].join(', ');
-  const strength = parseFloat(document.getElementById('imgStrength').value);
-
-  let done = 0;
-  btn.textContent = `â³ 0/${angles.length} Winkel...`;
-
-  for (const angleIdx of angles) {
-    const angleDesc = ANGLE_PROMPTS[angleIdx];
-    const shipDesc = getShipDescription(selectedShip.id);
-    const prompt = `${shipDesc}, ${angleDesc}${extraPrompt ? ', ' + extraPrompt : ''}, ${tags}, ${STYLE_BASE}`;
-
-    // Add loading card
-    const loaderId = `loader-${selectedShip.id}-${angleIdx}`;
-    addLoader(loaderId, `${selectedShip.name} ${DIRS[angleIdx].icon}`);
-
-    try {
-      const body = {
-        prompt,
-        negative_prompt: NEG,
-        modelId: model,
-        width: w, height: h,
-        num_images: 1,
-        public: false,
-        promptMagic: false,
-      };
-
-      if (uploadedRefId) {
-        body.init_image_id = uploadedRefId;
-        body.init_strength = strength;
-      }
-
-      const genRes = await fetch(`${API}/generations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify(body)
-      });
-
-      if (!genRes.ok) throw new Error(`HTTP ${genRes.status}`);
-      const genData = await genRes.json();
-      const genId = genData.sdGenerationJob?.generationId;
-      if (!genId) throw new Error('Keine Generation-ID');
-
-      // Poll
-      const images = await pollGeneration(genId, apiKey);
-      if (images.length > 0) {
-        const filename = `ship_${selectedShip.id}_${angleIdx}.png`;
-        replaceLoader(loaderId, images[0].url, filename, `${selectedShip.name} ${DIRS[angleIdx].label}`);
-        galleryCount++;
-        document.getElementById('galCount').textContent = galleryCount;
-      }
-    } catch(e) {
-      removeLoader(loaderId);
-      notify(`Winkel ${DIRS[angleIdx].label} fehlgeschlagen: ${e.message}`, 'err');
-    }
-
-    done++;
-    const pct = 15 + (done / angles.length) * 80;
-    fill.style.width = `${pct}%`;
-    btn.textContent = `â³ ${done}/${angles.length} Winkel...`;
-    await new Promise(r => setTimeout(r, 500)); // kleine Pause zwischen requests
-  }
-
-  fill.style.width = '100%';
-  setTimeout(() => { progress.classList.remove('show'); fill.style.width = '0%'; }, 800);
-  btn.disabled = false;
-  btn.textContent = 'â¡ Winkel generieren';
-  notify(`${done} Winkel generiert! Bereit zum Download â`, 'ok');
-}
-
-function getShipDescription(id) {
-  const desc = {
-    cog: 'hanseatic cog sailing ship, single mast, square sail, rounded hull, wooden medieval vessel',
-    small_cog: 'small hanseatic cog, single mast, compact wooden ship, coastal trader',
-    caravel: 'medieval caravel, three masts, lateen sails, sleek hull, explorer ship',
-    carrack: 'large carrack warship, four masts, high forecastle and sterncastle, imposing vessel',
-    hulk: 'hanseatic hulk, large cargo ship, deep hull, single mast, heavy transport vessel',
-    boat: 'small medieval rowing boat, oars, simple wooden construction, harbor vessel',
-  };
-  return desc[id] || 'medieval sailing ship';
-}
-
-// ââ GENERATE GENERAL âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-async function generateGeneral() {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  if (!apiKey) { notify('API Key fehlt!', 'err'); return; }
-
-  const prompt = document.getElementById('genPrompt').value.trim();
-  const base = CAT_PROMPTS[genCat];
-  if (!prompt && !base) { notify('Prompt eingeben!', 'err'); return; }
-
-  const [w, h] = document.getElementById('genSize').value.split('x').map(Number);
+  const useRef = document.getElementById('useRef').checked;
+  const ref = classRefs[selectedClassId];
   const count = parseInt(document.getElementById('genCount').value);
-  const model = document.getElementById('genModel').value;
-  const tags = [...activeTabs_gen].join(', ');
-  const fullPrompt = `${prompt || base}, ${tags}, ${STYLE_BASE}`;
+  const [w, h] = document.getElementById('genSize').value.split('x').map(Number);
+  const tags = [...activeStyleTags].join(', ');
+  const fullPrompt = tags ? `${promptText}, ${tags}` : promptText;
 
   const btn = document.getElementById('genBtn');
-  btn.disabled = true;
-  const progress = document.getElementById('genProgress');
   const fill = document.getElementById('genFill');
-  progress.classList.add('show');
-  fill.style.width = '20%';
+  const progress = document.getElementById('genProgress');
+  const status = document.getElementById('genStatus');
 
+  btn.disabled = true;
+  btn.textContent = 'â³ Starte...';
+  progress.classList.add('show');
+  fill.style.width = '8%';
+
+  const cls = allClasses.find(c => c.id === selectedClassId);
   const loaderIds = [];
+  switchTab('gallery');
   for (let i = 0; i < count; i++) {
-    const id = `gen-loader-${Date.now()}-${i}`;
-    addLoader(id, `${genCat} #${i+1}`);
+    const id = `gen-${Date.now()}-${i}`;
+    addLoader(id, `${cls ? cls.name : 'Asset'} #${i + 1}`);
     loaderIds.push(id);
   }
 
+  let initImageId = null;
+  if (useRef && ref) {
+    try {
+      btn.textContent = 'â¬ï¸ Referenz wird geladen...';
+      status.textContent = 'Stil-Referenz wird zu Leonardo hochgeladen...';
+      fill.style.width = '18%';
+      initImageId = await uploadImageFromUrl(ref.url, apiKey);
+      fill.style.width = '28%';
+      status.textContent = 'Referenz hochgeladen â';
+    } catch(e) {
+      status.textContent = '';
+      notify(`Referenz-Upload fehlgeschlagen (${e.message}) â generiere ohne Referenz`, 'warn');
+    }
+  }
+
+  btn.textContent = 'â³ Generiere...';
+  status.textContent = 'Generation lÃ¤uft...';
+  fill.style.width = '35%';
+
   try {
+    const body = {
+      prompt: fullPrompt,
+      negative_prompt: NEG,
+      modelId: selectedModelId,
+      width: w,
+      height: h,
+      num_images: count,
+      public: false,
+    };
+    if (initImageId) {
+      body.init_image_id = initImageId;
+      body.init_strength = parseFloat(document.getElementById('refStrength').value);
+    }
+
     const res = await fetch(`${API}/generations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ prompt: fullPrompt, negative_prompt: NEG, modelId: model, width: w, height: h, num_images: count, public: false })
+      body: JSON.stringify(body)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
+    }
     const data = await res.json();
     const genId = data.sdGenerationJob?.generationId;
+    if (!genId) throw new Error('Keine Generation-ID erhalten');
 
     fill.style.width = '50%';
+    status.textContent = 'Warte auf Ergebnis...';
     const images = await pollGeneration(genId, apiKey);
     fill.style.width = '95%';
-    loaderIds.forEach(id => removeLoader(id));
 
+    loaderIds.forEach(id => removeLoader(id));
     images.forEach((img, i) => {
       galleryCount++;
-      const filename = `hanse_${genCat}_${Date.now()}_${i+1}.png`;
-      addImageCard(img.url, filename, `${genCat} #${galleryCount}`);
+      const label = `${cls ? cls.name : 'Asset'} #${galleryCount}`;
+      const filename = `hanse_${selectedClassId}_${Date.now()}_${i + 1}.png`;
+      addImageCard(img.url, filename, label, selectedClassId);
     });
-
-    document.getElementById('galCount').textContent = galleryCount;
+    updateGalCounts();
     fill.style.width = '100%';
+    status.textContent = '';
     setTimeout(() => { progress.classList.remove('show'); fill.style.width = '0%'; }, 800);
-    notify(`${images.length} Assets generiert â`, 'ok');
+    notify(`${images.length} ${cls ? cls.name : 'Assets'} generiert â`, 'ok');
+
   } catch(e) {
     loaderIds.forEach(id => removeLoader(id));
+    status.textContent = '';
     notify(`Fehler: ${e.message}`, 'err');
+    progress.classList.remove('show');
+    fill.style.width = '0%';
   }
 
   btn.disabled = false;
   btn.textContent = 'â¡ Generieren';
 }
 
-// ââ POLLING ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-async function pollGeneration(genId, apiKey, maxAttempts = 30) {
+// âââ POLLING âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+async function pollGeneration(genId, apiKey, maxAttempts = 40) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(r => setTimeout(r, 2500));
     const res = await fetch(`${API}/generations/${genId}`, {
@@ -705,12 +643,12 @@ async function pollGeneration(genId, apiKey, maxAttempts = 30) {
     const data = await res.json();
     const gen = data.generations_by_pk;
     if (gen?.status === 'COMPLETE') return gen.generated_images || [];
-    if (gen?.status === 'FAILED') throw new Error('Generierung fehlgeschlagen');
+    if (gen?.status === 'FAILED') throw new Error('Leonardo: Generierung fehlgeschlagen');
   }
-  throw new Error('Timeout');
+  throw new Error('Timeout â Leonardo antwortet nicht');
 }
 
-// ââ GALLERY HELPERS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ GALLERY âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function getGallery() {
   const g = document.getElementById('gallery');
   const empty = g.querySelector('.empty');
@@ -719,12 +657,10 @@ function getGallery() {
 }
 
 function addLoader(id, label) {
-  const g = getGallery();
   const div = document.createElement('div');
-  div.className = 'loader';
-  div.id = id;
+  div.className = 'loader'; div.id = id;
   div.innerHTML = `<div class="spinner"></div><div class="loader-text">${label}</div>`;
-  g.prepend(div);
+  getGallery().prepend(div);
 }
 
 function removeLoader(id) {
@@ -732,32 +668,64 @@ function removeLoader(id) {
   if (el) el.remove();
 }
 
-function replaceLoader(id, url, filename, label) {
-  const el = document.getElementById(id);
-  if (!el) { addImageCard(url, filename, label); return; }
-  el.outerHTML = makeCardHTML(url, filename, label);
-}
+function addImageCard(url, filename, label, classId) {
+  const safeUrl = url.replace(/'/g, "\\'");
+  const safeFilename = filename.replace(/'/g, "\\'");
+  const safeLabel = label.replace(/'/g, "\\'");
 
-function addImageCard(url, filename, label) {
-  const g = getGallery();
-  const div = document.createElement('div');
-  div.innerHTML = makeCardHTML(url, filename, label);
-  g.prepend(div.firstChild);
-}
+  const classOptions = allClasses.map(c =>
+    `<div class="lock-menu-item" onclick="setRef('${c.id}','${safeUrl}','${safeLabel}');closeLockMenus()">
+       ${c.icon} ${c.name}
+     </div>`
+  ).join('');
 
-function makeCardHTML(url, filename, label) {
-  return `<div class="img-card">
-    <img src="${url}" alt="${filename}" loading="lazy">
-    <div class="img-meta">
-      <span class="name">${label}</span>
-      <div class="img-actions">
-        <button class="icon-btn" title="Download als ${filename}" onclick="dlImg('${url}','${filename}')">â¬</button>
+  const card = document.createElement('div');
+  card.className = 'img-card';
+  card.innerHTML = `
+    <img src="${url}" alt="${filename}" loading="lazy" onclick="openLightbox('${safeUrl}')">
+    <div class="img-actions">
+      <span class="img-label">${label}</span>
+      <button class="icon-btn" title="Download" onclick="dlImg('${safeUrl}','${safeFilename}')">â¬</button>
+      <div class="lock-dropdown">
+        <button class="lock-btn" onclick="toggleLockMenu(this)">ð</button>
+        <div class="lock-menu">
+          <div style="padding:6px 14px;font-size:0.7rem;color:var(--muted);border-bottom:1px solid var(--border)">Als Referenz fÃ¼r:</div>
+          ${classOptions}
+        </div>
       </div>
-    </div>
-  </div>`;
+    </div>`;
+  getGallery().prepend(card);
 }
 
-// ââ DOWNLOAD âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function toggleLockMenu(btn) {
+  const menu = btn.nextElementSibling;
+  const wasOpen = menu.classList.contains('open');
+  closeLockMenus();
+  if (!wasOpen) menu.classList.add('open');
+}
+
+function closeLockMenus() {
+  document.querySelectorAll('.lock-menu.open').forEach(m => m.classList.remove('open'));
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.lock-dropdown')) closeLockMenus();
+});
+
+function updateGalCounts() {
+  document.getElementById('galCount').textContent = galleryCount;
+  document.getElementById('galCountBig').textContent = galleryCount;
+}
+
+// âââ LIGHTBOX ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function openLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('show'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// âââ DOWNLOAD ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 async function dlImg(url, filename) {
   try {
     const res = await fetch(url);
@@ -773,28 +741,24 @@ async function dlImg(url, filename) {
 function downloadAll() {
   const imgs = document.querySelectorAll('.img-card img');
   if (!imgs.length) { notify('Keine Bilder', 'err'); return; }
-  imgs.forEach((img, i) => setTimeout(() => dlImg(img.src, img.alt || `hanse_asset_${i+1}.png`), i * 600));
+  imgs.forEach((img, i) => setTimeout(() => dlImg(img.src, img.alt || `hanse_${i + 1}.png`), i * 700));
 }
 
 function clearGallery() {
-  document.getElementById('gallery').innerHTML = '<div class="empty"><div class="icon">â</div><p>Generiere deine ersten Assets</p></div>';
+  if (!confirm('Galerie leeren? (Stil-Referenzen bleiben erhalten)')) return;
+  document.getElementById('gallery').innerHTML = '<div class="empty"><div class="icon">â</div><p>Noch keine Assets generiert</p></div>';
   galleryCount = 0;
-  document.getElementById('galCount').textContent = '0';
+  updateGalCounts();
 }
 
-// ââ TABS & CATS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ TABS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['ships','general'][i] === name));
+  const names = ['classes', 'generate', 'gallery'];
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
 }
 
-function setGenCat(el, cat) {
-  genCat = cat;
-  document.querySelectorAll('#tab-general .ship-card').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-}
-
-// ââ NOTIFY ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ NOTIFY âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function notify(msg, type = 'ok') {
   const n = document.getElementById('notif');
   n.textContent = msg;
