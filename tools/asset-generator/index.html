@@ -1,622 +1,960 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HANSE Asset Studio</title>
-  <style>
-    :root {
-      --bg: #0e0c09; --surface: #1a1610; --surface2: #241e14; --surface3: #2e2618;
-      --border: #3d3020; --accent: #c8922a; --accent2: #e6b84a;
-      --text: #e8dcc8; --muted: #8a7a5c; --ok: #4a9e6a; --err: #c84a4a; --warn: #c89020;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HANSE Asset Generator</title>
+<style>
+  :root {
+    --bg: #0e0c09;
+    --surface: #1a1610;
+    --surface2: #241e14;
+    --border: #3d3020;
+    --accent: #c8922a;
+    --accent2: #e6b84a;
+    --text: #e8dcc8;
+    --muted: #8a7a5c;
+    --success: #4a9e6a;
+    --error: #c84a4a;
+  }
 
-    header {
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-      position: sticky; top: 0; z-index: 100;
-    }
-    header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.06em; color: var(--accent2); white-space: nowrap; }
-    .api-wrap { display: flex; gap: 8px; flex: 1; min-width: 200px; }
-    .api-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-size: 0.82rem; }
-    .api-input:focus { outline: none; border-color: var(--accent); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 16px; overflow-x: auto; }
-    .tab { padding: 11px 18px; cursor: pointer; font-size: 0.86rem; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
-    .tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
-    .tab:hover:not(.active) { color: var(--text); }
-    .tab-content { display: none; padding: 20px 16px; max-width: 980px; margin: 0 auto; }
-    .tab-content.active { display: block; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 20px 24px 40px;
+  }
 
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
-    .panel-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px; }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+  }
 
-    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; }
-    input[type=text], input[type=password], textarea, select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 0.84rem; font-family: inherit; }
-    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 72px; }
-    .form-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 12px; }
-    .form-group { margin-bottom: 12px; }
+  .header-left { display: flex; align-items: center; gap: 14px; flex: 1; }
 
-    .btn { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.86rem; font-weight: 600; transition: all 0.15s; font-family: inherit; }
-    .btn-primary { background: var(--accent); color: #1a1000; }
-    .btn-primary:hover:not(:disabled) { background: var(--accent2); }
-    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-    .btn-secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
-    .btn-secondary:hover { border-color: var(--accent); }
-    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
-    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
-    .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
-    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--accent2);
+  }
 
-    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
-    .chip { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.77rem; cursor: pointer; transition: all 0.12s; user-select: none; }
-    .chip:hover { border-color: var(--accent); color: var(--text); }
-    .chip.active { background: var(--accent); border-color: var(--accent); color: #1a1000; font-weight: 600; }
-    .chip.locked { background: rgba(74,158,106,0.15); border-color: var(--ok); color: var(--ok); }
+  .badge {
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
 
-    .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-    .model-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.12s; }
-    .model-card:hover { border-color: var(--accent); }
-    .model-card.active { border-color: var(--accent); background: rgba(200,146,42,0.12); }
-    .model-name { font-size: 0.81rem; font-weight: 600; }
-    .model-desc { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+  .anchor { font-size: 1.4rem; }
 
-    .class-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
-    .class-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.15s; position: relative; }
-    .class-card:hover { border-color: var(--accent); transform: translateY(-1px); }
-    .class-card.has-ref { border-color: var(--ok); }
-    .class-thumb { width: 100%; aspect-ratio: 1; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; position: relative; overflow: hidden; }
-    .class-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .class-lock-badge { position: absolute; top: 6px; right: 6px; background: rgba(74,158,106,0.92); color: #fff; border-radius: 4px; font-size: 0.68rem; padding: 2px 6px; }
-    .class-info { padding: 8px 10px; }
-    .class-name { font-size: 0.82rem; font-weight: 600; }
-    .class-status { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
-    .class-card.has-ref .class-status { color: var(--ok); }
+  .header-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
 
-    .ref-zone { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .ref-thumb { width: 64px; height: 64px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
-    .ref-zone-info { flex: 1; min-width: 120px; }
-    .ref-zone-title { font-size: 0.8rem; font-weight: 600; color: var(--accent2); }
-    .ref-zone-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
 
-    .slider-wrap { display: flex; align-items: center; gap: 10px; }
-    input[type=range] { flex: 1; accent-color: var(--accent); }
-    .slider-val { min-width: 34px; text-align: right; font-size: 0.84rem; color: var(--accent2); }
-    .slider-hint { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+  .sidebar { display: flex; flex-direction: column; gap: 14px; }
 
-    .progress { height: 5px; background: var(--surface2); border-radius: 3px; margin: 10px 0; overflow: hidden; display: none; }
-    .progress.show { display: block; }
-    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width 0.4s ease; width: 0%; }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
 
-    #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-    .img-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
-    .img-card:hover { border-color: var(--accent); }
-    .img-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: zoom-in; }
-    .img-actions { padding: 6px 8px; display: flex; gap: 4px; align-items: center; border-top: 1px solid var(--border); flex-wrap: nowrap; }
-    .img-label { font-size: 0.7rem; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-    .icon-btn { background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--muted); transition: color 0.12s; padding: 2px 3px; flex-shrink: 0; }
-    .icon-btn:hover { color: var(--accent2); }
-    .lock-btn { background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 0.7rem; color: var(--muted); padding: 2px 6px; transition: all 0.12s; white-space: nowrap; flex-shrink: 0; }
-    .lock-btn:hover { border-color: var(--ok); color: var(--ok); }
+  .panel-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
 
-    .loader { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; aspect-ratio: 1; }
-    .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loader-text { font-size: 0.72rem; color: var(--muted); text-align: center; padding: 0 8px; }
-    .empty { grid-column: 1/-1; text-align: center; padding: 50px 20px; color: var(--muted); }
-    .empty .icon { font-size: 2.5rem; margin-bottom: 10px; }
+  /* API KEY */
+  .api-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
 
-    .gal-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    .gal-count { font-size: 0.8rem; color: var(--muted); }
-    .gal-count span { color: var(--accent2); font-weight: 600; }
+  .api-row input {
+    flex: 1;
+    font-family: monospace;
+    font-size: 0.78rem;
+  }
 
-    .lock-dropdown { position: relative; display: inline-block; flex-shrink: 0; }
-    .lock-menu { position: absolute; bottom: 110%; right: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; min-width: 170px; z-index: 50; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.6); display: none; }
-    .lock-menu.open { display: block; }
-    .lock-menu-item { padding: 8px 14px; font-size: 0.8rem; cursor: pointer; transition: background 0.1s; }
-    .lock-menu-item:hover { background: var(--surface3); color: var(--ok); }
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
 
-    #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.93); z-index: 200; align-items: center; justify-content: center; cursor: zoom-out; }
-    #lightbox.show { display: flex; }
-    #lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; }
+  .status-dot.ok { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .status-dot.err { background: var(--error); }
 
-    .notif { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 18px; font-size: 0.86rem; transition: transform 0.3s; z-index: 999; white-space: nowrap; pointer-events: none; }
-    .notif.show { transform: translateX(-50%) translateY(0); }
-    .notif.ok { border-color: var(--ok); color: var(--ok); }
-    .notif.err { border-color: var(--err); color: var(--err); }
-    .notif.warn { border-color: var(--warn); color: var(--warn); }
+  /* CATEGORY GRID */
+  .category-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
 
-    .info-box { background: rgba(200,146,42,0.07); border: 1px solid rgba(200,146,42,0.25); border-radius: 8px; padding: 10px 14px; font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; }
-    .info-box strong { color: var(--accent2); }
+  .cat-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 6px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-family: inherit;
+  }
 
-    @media (max-width: 600px) {
-      .tab { padding: 9px 12px; font-size: 0.8rem; }
-      .tab-content { padding: 14px 12px; }
-      #gallery { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-      .class-grid { grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); }
-    }
-  </style>
+  .cat-btn:hover { border-color: var(--accent); background: #2a2015; }
+  .cat-btn.active { border-color: var(--accent2); background: #2e2210; color: var(--accent2); }
+  .cat-btn .icon { font-size: 1.25rem; display: block; margin-bottom: 3px; }
+
+  /* FORM */
+  .field { margin-top: 13px; }
+  .field:first-child { margin-top: 0; }
+
+  .field label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  input[type="text"], input[type="password"], textarea, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    color: var(--text);
+    font-size: 0.86rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+
+  textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+  select option { background: #1a1610; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* STYLE CHIPS */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+  }
+
+  .chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 9px;
+    font-size: 0.73rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--muted);
+    user-select: none;
+  }
+
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip.active { border-color: var(--accent2); background: #2e2210; color: var(--accent2); }
+
+  /* PROGRESS */
+  .progress-wrap { margin-top: 13px; display: none; }
+  .progress-wrap.show { display: block; }
+
+  .progress-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.4s;
+    width: 0%;
+  }
+
+  /* GENERATE BUTTON */
+  .gen-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 13px;
+    background: linear-gradient(135deg, #b07820, var(--accent2));
+    border: none;
+    border-radius: 10px;
+    color: #0e0c09;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .gen-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(200,146,42,0.35); }
+  .gen-btn:active { transform: translateY(0); }
+  .gen-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* QUICK PRESETS */
+  .preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .preset-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 11px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .preset-item:hover { border-color: var(--accent); color: var(--text); }
+
+  /* MAIN PANEL */
+  .main-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .results-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .count-badge {
+    background: var(--accent);
+    color: #0e0c09;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+
+  .batch-btns { display: flex; gap: 7px; }
+
+  .sm-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 11px;
+    font-size: 0.73rem;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .sm-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* GALLERY */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+  }
+
+  .img-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s, transform 0.15s;
+    cursor: pointer;
+    animation: fadeUp 0.3s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .img-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  .img-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+  }
+
+  .img-meta {
+    padding: 9px 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .img-num { font-size: 0.73rem; color: var(--muted); }
+
+  .img-actions { display: flex; gap: 5px; }
+
+  .icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 4px 7px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: all 0.15s;
+    color: var(--text);
+    font-family: inherit;
+  }
+
+  .icon-btn:hover { border-color: var(--accent); background: #2a2015; }
+
+  /* LOADING CARD */
+  .loading-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { font-size: 0.74rem; color: var(--muted); }
+
+  /* EMPTY */
+  .empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .empty .big { font-size: 3rem; margin-bottom: 12px; }
+  .empty p { font-size: 0.88rem; line-height: 1.6; }
+  .empty strong { color: var(--accent2); }
+
+  /* LIGHTBOX */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .lightbox.show { opacity: 1; pointer-events: all; }
+
+  .lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 80px rgba(0,0,0,0.8);
+  }
+
+  .lightbox-close {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    font-size: 1.8rem;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+
+  .lightbox-close:hover { color: var(--text); }
+
+  /* NOTIFICATION */
+  .notif {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 17px;
+    font-size: 0.84rem;
+    max-width: 300px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.25s;
+    z-index: 999;
+  }
+
+  .notif.show { transform: translateY(0); opacity: 1; }
+  .notif.ok { border-color: var(--success); color: var(--text); }
+  .notif.err { border-color: var(--error); color: var(--error); }
+
+  /* COLLAPSIBLE */
+  .collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .collapsible-arrow {
+    font-size: 0.7rem;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+
+  .collapsible-body { overflow: hidden; }
+  .collapsible-body.collapsed { display: none; }
+
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    body { padding: 14px; }
+  }
+</style>
 </head>
 <body>
 
 <header>
-  <h1>⚓ HANSE Asset Studio</h1>
-  <div class="api-wrap">
-    <input type="password" class="api-input" id="apiKey" placeholder="Leonardo AI API Key...">
+  <div class="header-left">
+    <span class="anchor">⚓</span>
+    <h1>HANSE Asset Generator</h1>
+    <span class="badge">Leonardo AI</span>
   </div>
+  <span class="header-hint">Ctrl+Enter = Generieren</span>
 </header>
 
-<div class="tabs">
-  <div class="tab active" onclick="switchTab('classes')">🎯 Asset Klassen</div>
-  <div class="tab" onclick="switchTab('generate')">⚡ Generieren</div>
-  <div class="tab" onclick="switchTab('gallery')">🖼 Galerie (<span id="galCount">0</span>)</div>
-</div>
+<div class="layout">
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar">
 
-<!-- ══ TAB: ASSET KLASSEN ══ -->
-<div class="tab-content active" id="tab-classes">
-  <div class="info-box">
-    <strong>Flow:</strong> Generiere Assets frei → klick 🔒 auf ein Bild in der Galerie → setze es als Stil-Referenz für eine Klasse → ab dann nutzt diese Klasse das Bild automatisch als img2img-Basis für konsistenten Look.
-  </div>
-  <div class="panel">
-    <div class="panel-title">Asset Klassen für HANSE</div>
-    <div class="class-grid" id="classGrid"></div>
-    <div class="btn-row">
-      <button class="btn btn-ghost btn-sm" onclick="addCustomClass()">+ Eigene Klasse hinzufügen</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ TAB: GENERIEREN ══ -->
-<div class="tab-content" id="tab-generate">
-
-  <div class="panel">
-    <div class="panel-title">Für welche Klasse?</div>
-    <div class="chip-group" id="genClassChips"></div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title">Prompt</div>
-    <div class="form-group">
-      <textarea id="genPrompt" rows="3" placeholder="Beschreibe was generiert werden soll..."></textarea>
-    </div>
-    <div class="form-group">
-      <label>Stil-Tags</label>
-      <div class="chip-group" id="styleTagChips"></div>
-    </div>
-  </div>
-
-  <div class="panel" id="refPanel">
-    <div class="panel-title">🔒 Stil-Referenz (img2img)</div>
-    <div id="refZoneContent"></div>
-    <div id="strengthGroup" style="display:none;margin-top:12px">
-      <label>Referenz-Stärke</label>
-      <div class="slider-wrap">
-        <input type="range" id="refStrength" min="0.05" max="0.7" step="0.05" value="0.25"
-               oninput="document.getElementById('refStrengthVal').textContent=this.value">
-        <span class="slider-val" id="refStrengthVal">0.25</span>
+    <!-- API KEY -->
+    <div class="panel">
+      <div class="panel-title">API Key</div>
+      <div class="api-row">
+        <input type="password" id="apiKey" placeholder="Leonardo API Key..." autocomplete="off">
+        <div class="status-dot" id="apiDot" title="API Key Status"></div>
       </div>
-      <div class="slider-hint"><span>← Stil stark übernehmen</span><span>mehr Variation →</span></div>
     </div>
-    <div style="margin-top:10px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="useRef" style="width:auto">
-        <span style="font-size:0.82rem;color:var(--text)">Referenz für diese Generierung verwenden</span>
-      </label>
-    </div>
-  </div>
 
-  <div class="panel">
-    <div class="panel-title">KI-Modell</div>
-    <div class="model-grid" id="genModelGrid"></div>
-  </div>
+    <!-- KATEGORIE + EINSTELLUNGEN -->
+    <div class="panel">
+      <div class="panel-title">Asset-Kategorie</div>
+      <div class="category-grid" id="catGrid">
+        <button class="cat-btn active" data-cat="ships"><span class="icon">⛵</span>Schiffe</button>
+        <button class="cat-btn" data-cat="cities"><span class="icon">🏰</span>Städte</button>
+        <button class="cat-btn" data-cat="goods"><span class="icon">📦</span>Waren</button>
+        <button class="cat-btn" data-cat="characters"><span class="icon">🧑‍✈️</span>Charaktere</button>
+        <button class="cat-btn" data-cat="ui"><span class="icon">🎨</span>UI-Elemente</button>
+        <button class="cat-btn" data-cat="backgrounds"><span class="icon">🌊</span>Hintergründe</button>
+        <button class="cat-btn" data-cat="icons"><span class="icon">⚡</span>Icons</button>
+        <button class="cat-btn" data-cat="custom"><span class="icon">✏️</span>Eigener</button>
+      </div>
 
-  <div class="panel">
-    <div class="panel-title">Einstellungen</div>
-    <div class="form-row">
-      <div>
-        <label>Anzahl</label>
-        <select id="genCount">
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4" selected>4</option>
+      <div class="field">
+        <label>Prompt <small style="color:var(--muted);font-size:0.7rem">(kombiniert mit HANSE-Stil)</small></label>
+        <textarea id="prompt" placeholder="z.B. Hansekogge, Seitenansicht, auf ruhiger See..."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Stil-Modifikatoren</label>
+        <div class="chips" id="chips">
+          <span class="chip active" data-tag="medieval hanseatic style">Hanseatisch</span>
+          <span class="chip active" data-tag="detailed illustration">Detailliert</span>
+          <span class="chip" data-tag="transparent background">Transparent</span>
+          <span class="chip" data-tag="pixel art">Pixel Art</span>
+          <span class="chip" data-tag="oil painting">Ölgemälde</span>
+          <span class="chip" data-tag="flat design icon">Flat Icon</span>
+          <span class="chip" data-tag="isometric view">Isometrisch</span>
+          <span class="chip" data-tag="top down view">Top-Down</span>
+          <span class="chip" data-tag="sepia tone">Sepia</span>
+          <span class="chip" data-tag="game asset sprite sheet">Sprite Sheet</span>
+        </div>
+      </div>
+
+      <div class="field row">
+        <div>
+          <label>Format</label>
+          <select id="aspect">
+            <option value="512x512">512×512 (Quadrat)</option>
+            <option value="768x512">768×512 (Quer)</option>
+            <option value="512x768">512×768 (Hoch)</option>
+            <option value="1024x1024">1024×1024 (HD)</option>
+            <option value="1024x768">1024×768 (HD Quer)</option>
+          </select>
+        </div>
+        <div>
+          <label>Anzahl</label>
+          <select id="count">
+            <option value="1">1 Bild</option>
+            <option value="2">2 Bilder</option>
+            <option value="4" selected>4 Bilder</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Modell</label>
+        <select id="model">
+          <option value="b24e16ff-06e3-43eb-8d33-4416c2d75876">Leonardo Diffusion XL</option>
+          <option value="6bef9f1b-29cb-40c7-b9df-32b51c1f67d3">Leonardo Creative</option>
+          <option value="aa77f04e-3eec-4034-9c07-d0f619684628">Leonardo Kino XL</option>
+          <option value="1e60896f-3c26-4296-8ecc-53e2afecc132">Leonardo Diffusion</option>
+          <option value="5c232a9e-9061-4777-980a-ddc8e65647c6">DreamShaper v7</option>
+          <option value="e316348f-7773-490e-adcd-46757c738eb9">Absolute Reality v1.6</option>
         </select>
       </div>
-      <div>
-        <label>Größe</label>
-        <select id="genSize">
-          <option value="512x512">512 × 512</option>
-          <option value="768x768" selected>768 × 768</option>
-          <option value="1024x1024">1024 × 1024</option>
-          <option value="768x512">768 × 512 (Quer)</option>
-          <option value="512x768">512 × 768 (Hoch)</option>
-        </select>
+
+      <!-- ADVANCED (collapsible) -->
+      <div class="field">
+        <div class="collapsible-header" onclick="toggleAdvanced()">
+          <label style="cursor:pointer;margin:0">Negativer Prompt</label>
+          <span class="collapsible-arrow" id="advArrow">▼</span>
+        </div>
+        <div class="collapsible-body collapsed" id="advBody">
+          <textarea id="negPrompt" style="margin-top:6px;min-height:60px;font-size:0.78rem" placeholder="Was soll NICHT im Bild sein...">modern, contemporary, futuristic, low quality, blurry, watermark, signature, text, logo</textarea>
+        </div>
+      </div>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-label">
+          <span id="progressLabel">Generiere...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <button class="gen-btn" id="genBtn" onclick="generate()">⚡ Generieren</button>
+    </div>
+
+    <!-- QUICK PRESETS -->
+    <div class="panel">
+      <div class="panel-title">Schnell-Presets</div>
+      <div class="preset-list">
+        <button class="preset-item" onclick="loadPreset('cog')">⛵ Hansekogge (Seitenansicht)</button>
+        <button class="preset-item" onclick="loadPreset('caravel')">🚢 Karavelle (transparent)</button>
+        <button class="preset-item" onclick="loadPreset('lubeck')">🏰 Lübeck Stadtansicht</button>
+        <button class="preset-item" onclick="loadPreset('spices')">🌿 Gewürze &amp; Waren Icons</button>
+        <button class="preset-item" onclick="loadPreset('merchant')">🧔 Hansekaufmann Portrait</button>
+        <button class="preset-item" onclick="loadPreset('sea')">🌊 Ostsee Hintergrund</button>
+        <button class="preset-item" onclick="loadPreset('map')">🗺️ Mittelalterliche Seekarte</button>
+        <button class="preset-item" onclick="loadPreset('harbor')">⚓ Hafenszene</button>
       </div>
     </div>
+
   </div>
 
-  <button class="btn btn-primary" id="genBtn" onclick="generate()" style="width:100%;padding:12px;font-size:0.95rem">⚡ Generieren</button>
-  <div class="progress" id="genProgress"><div class="progress-fill" id="genFill"></div></div>
-  <div id="genStatus" style="font-size:0.78rem;color:var(--muted);margin-top:6px;text-align:center"></div>
-
-</div>
-
-<!-- ══ TAB: GALERIE ══ -->
-<div class="tab-content" id="tab-gallery">
-  <div class="gal-header">
-    <div class="gal-count">Generiert: <span id="galCountBig">0</span></div>
-    <div class="btn-row">
-      <button class="btn btn-ghost btn-sm" onclick="downloadAll()">⬇ Alle</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearGallery()">🗑 Leeren</button>
+  <!-- RIGHT: GALLERY -->
+  <div class="main-panel">
+    <div class="results-header">
+      <div class="results-title">
+        Generierte Assets
+        <span class="count-badge" id="countBadge">0</span>
+      </div>
+      <div class="batch-btns">
+        <button class="sm-btn" onclick="downloadAll()">⬇ Alle laden</button>
+        <button class="sm-btn" onclick="clearGallery()">🗑 Leeren</button>
+      </div>
     </div>
-  </div>
-  <div id="gallery">
-    <div class="empty"><div class="icon">⚓</div><p>Noch keine Assets generiert</p></div>
+    <div class="gallery" id="gallery">
+      <div class="empty">
+        <div class="big">⚓</div>
+        <p>Kategorie wählen und auf <strong>Generieren</strong> klicken.<br>
+        <span style="font-size:0.8rem;opacity:0.7">Tipp: Schnell-Presets liefern optimierte Prompts.</span></p>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- LIGHTBOX -->
-<div id="lightbox" onclick="closeLightbox()">
-  <img id="lightboxImg" src="" alt="">
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close">✕</span>
+  <img id="lightboxImg" src="" alt="Asset Vorschau">
 </div>
 
-<!-- NOTIF -->
 <div class="notif" id="notif"></div>
 
 <script>
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const API = 'https://cloud.leonardo.ai/api/rest/v1';
-const NEG = 'blurry, low quality, distorted, deformed, watermark, text, signature, bad anatomy, duplicate, cropped, jpeg artifacts';
-const REFS_KEY = 'hanse_class_refs_v2';
+const STYLE_BASE = "medieval hanseatic era, 15th century Baltic trade, high quality game art, consistent art style";
 
-const MODELS = [
-  { id: 'b24e16ff-06e3-43eb-8d33-4416c2d75876', name: 'Phoenix',       desc: 'Top Qualität	��[	�K��Y�	͘�Y�Y�X�L�X؋M��X�Y�L̘�LX�Y������[YN�	�Y��\�[ۈ	�\�Έ	՚Y[�Z]Y��K��Y�	�XM�ٌ
-KL�YX�M�NX�
-�Y��NM�
+const CAT_PROMPTS = {
+  ships: "hansekogge sailing ship, detailed wooden medieval vessel, Baltic Sea, side view",
+  cities: "medieval hanseatic city, half-timbered houses, market square, church tower, cobblestone streets",
+  goods: "medieval trade goods, cloth bolts, barrels, crates, salt, fish, amber, arranged neatly",
+  characters: "medieval merchant, hanseatic trader, period clothing, portrait style",
+  ui: "medieval UI element, parchment texture, wooden frame, decorative border, game interface",
+  backgrounds: "Baltic Sea landscape, medieval harbor, North Sea storm, calm waters, medieval coastline",
+  icons: "medieval item icon, single object, clean background, game inventory style",
+  custom: ""
+};
 
-��	��[YN�	�Y��[��	�\�Έ	����[	�K��Y�	�YM�M��L�̍�M�M�NX��ML�L�Y�X��L̉��[YN�	��[��	�\�Έ	��[�[X]\��	�K��Y�	�L�M���M����MLKXY�M
-��M����X�I��[YN�	�X�ˈ�X[]I�\�Έ	ԙX[\�\��	�K��Y�	�
-�X����M��M�ML�XLL�KY
-����YLX͍
-	��[YN�	��X[T�\\�
-��\�Έ	ј[�\�K�[\���K�N��ۜ�Q�US��T��T�H�Y�	��\���[YN�	���Y��I�X�ێ�	�������\�	�[��X]X�YYY]�[���[��Z[[������\�YH�Y]�]Z[Y�[YH��]K�[��\�[��X��ܛ�[�\��]Y	�K��Y�	�\��܉��[YN�	�Y�[��X�ێ�	�'������\�	�YYY]�[[��X]X�\��܋���[��\�Z�\�KY\��[�����Z[[��\��Y]�X��[YH\��]]Z[Y	�K��Y�	�][\���[YN�	�][\��X�ێ�	���;�#����\�	�YYY]�[�Y[��][K�\��������X\ۈ܈���[YH\��]X�ۋ\��]Yۈ�[��\�[��X��ܛ�[�	�K��Y�	��\����[YN�	��\�[��X�ێ�	�'������\�	�YYY]�[�Y[���\�\��ܚ�[��X]X�[YKܛ�]H\��Y[��ܙ\�]Z[Y[\��][ۋ�\�\�	�K��Y�	�ZI��[YN�	�RH�Y[����X�ێ�	�'��	���\�	�YYY]�[�[�\�H�[YHRH[[Y[�\��Y[���[YK���[�[�[X�ܘ]]�H�ܙ\�Q[[Y[�	�K��Y�	��\����[YN�	��\�Z�\�I�X�ێ�	�'��I���\�	�YYY]�[[��X]X�Y\��[��\�X�\�ܝ�Z]]Z[Y�X�K�[YH���\�X�\�\��Z\�\	�K��Y�	�\��Z[���[YN�	�\��Z[��X�ێ�	�'�����\�	�YYY]�[X\\��Z[�[K��\�[�XH[�\��܋�Y�ۈ�\��Y]�X��[YH[I�K��Y�	�Y��X����[YN�	�Y��Z�I�X�ێ�	��*	���\�	�YYY]�[�[YH�\�X[Y��X��[�܈��]\�܈�\�H\�X�HY��X��[��\�[��X��ܛ�[��X[�Y�\��K�N��ۜ��SW�Q��H	�YYY]�[[\��][ۉ�	�[�\Z[�Y	�	�]Z[Y	�	��[^�Y	��	�Z[�\�I�	��]\���܉�	�^[\�	�	��ۘ�\\�	��	��[��\�[��X��ܛ�[�	�	��[YH\��]	�	�Y��\��][ۉ�	ٛ]�Y[����N���8� 8� 8� �UH8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �]�\�ԙY��H�N][�\��\�H�N]�[X�Y�\��YH	��\��]�[X�Y[�[YHS�S��K�Y]X�]�T�[UY��H�]��]
-��YYY]�[[\��][ۉ�	��[YH\��]	�JN]�[\�P��[�H���8� 8� 8� S�U8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ[�]
+const PRESETS = {
+  cog:      { prompt: "hansekogge cog sailing ship, detailed wooden hull, single mast, side profile view, Baltic Sea background, 15th century", tags: ['medieval hanseatic style', 'detailed illustration'], cat: 'ships' },
+  caravel:  { prompt: "medieval caravel sailing ship, detailed rigging, three masts, isolated on white background", tags: ['medieval hanseatic style', 'detailed illustration', 'transparent background'], cat: 'ships' },
+  lubeck:   { prompt: "Luebeck medieval city panorama, Holstentor gate, church spires, harbor with ships, golden hour light, panoramic view", tags: ['medieval hanseatic style', 'oil painting'], cat: 'cities' },
+  spices:   { prompt: "set of medieval trade goods icons, spices pepper saffron cinnamon, cloth amber salt fish, individual items on dark background", tags: ['medieval hanseatic style', 'flat design icon'], cat: 'goods' },
+  merchant: { prompt: "hanseatic merchant portrait, wealthy 15th century trader, fur-trimmed coat, confident expression, studio portrait", tags: ['medieval hanseatic style', 'detailed illustration'], cat: 'characters' },
+  sea:      { prompt: "Baltic Sea panorama background, calm water, dramatic cloudy sky, distant coastline, atmospheric, wide angle", tags: ['medieval hanseatic style', 'detailed illustration'], cat: 'backgrounds' },
+  map:      { prompt: "antique medieval nautical map, Baltic Sea, hand drawn coastlines, compass rose, sea monsters, aged parchment", tags: ['sepia tone', 'detailed illustration'], cat: 'backgrounds' },
+  harbor:   { prompt: "medieval harbor scene, wooden docks, ships loading cargo, merchants and sailors, busy port atmosphere", tags: ['medieval hanseatic style', 'detailed illustration'], cat: 'cities' }
+};
 
-H�Y]J
-N�Z[�\��ܚY
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let currentCat = 'ships';
+let activeTags = new Set(['medieval hanseatic style', 'detailed illustration']);
+let totalGenerated = 0;
+let advOpen = false;
 
-N�Z[�[��\���\�
-N�Z[�[UY��\�
-N�Z[[�[ܚY
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(function init() {
+  // Load saved API key
+  const saved = localStorage.getItem('hanse_api_key');
+  if (saved) {
+    document.getElementById('apiKey').value = saved;
+    document.getElementById('apiDot').className = 'status-dot ok';
+  }
 
-N�Y��\��Y�[�[
+  // Category buttons
+  document.getElementById('catGrid').addEventListener('click', e => {
+    const btn = e.target.closest('.cat-btn');
+    if (!btn) return;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCat = btn.dataset.cat;
+    const p = CAT_PROMPTS[currentCat];
+    const promptEl = document.getElementById('prompt');
+    promptEl.placeholder = p || 'Eigener Prompt...';
+  });
 
-NB���[��[ۈ�Y]J
-H�\�ԙY��H�N[�\��\�Hˋ��Q�US��T��T�N�H�ۜ��ܙYH��[�ܘY�K��]][J�Q����VJNY�
-�ܙY
-H�ۜ�]HH��Ӌ�\��J�ܙY
-N�\�ԙY��H]K��Y���N���\�ܙH�\��H�\��\Y�
-]K��\��P�\��\�H]K��\��P�\��\˙�ܑXX�
-�O�Y�
-X[�\��\˙�[�
-O��YOOH˚Y
-JH[�\��\˜\�
-�NJNB�B�H�]�
-JH�B�B���[��[ۈ�]�Q]J
-H�ۜ��\��P�\��\�H[�\��\˙�[\��O�QT�UUS��T��T˙�[�
-O��YOOH˚Y
-JN��[�ܘY�K��]][J�Q����VK��Ӌ���[��Y�J��Y�Έ�\�ԙY���\��P�\��\�JJNB����8� 8� 8� �T��ԒQ8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[�\��ܚY
+  // Style chips
+  document.getElementById('chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const tag = chip.dataset.tag;
+    if (activeTags.has(tag)) { activeTags.delete(tag); chip.classList.remove('active'); }
+    else { activeTags.add(tag); chip.classList.add('active'); }
+  });
 
-H�ۜ�ܚYH��[Y[���][[Y[��RY
-	��\��ܚY	�NܚY�[��\�SH	��[�\��\˙�ܑXX�
-��O��ۜ��Y�H�\�ԙY����˚YN�ۜ��\�H��[Y[��ܙX]Q[[Y[�
-	�]��N�\���\�Ә[YHH	��\��X�\�	�
-�
-�Y��	�\�\�Y���	��N�\��[��\�SH�]��\��H��\��][X����	ܙY���[Y�ܘ�H�ܙY��\�H�[H���˛�[Y_H��Y[��H�^�H�ۙ\��܏H�\˜\�[�[[Y[��[��\�SI��˚X�۟H����[��\��H��\��[���X�Y�H��'�$���[�����˚X�۟B��]���]��\��H��\��Z[��ȏ��]��\��H��\��[�[YH����˚X�۟H	��˛�[Y_O�]���]��\��H��\��\�]\ȏ�ܙY��	�'���Y�\�[��Z�]���	�����Z[�H�Y�\�[���O�]����]���\��Y]�[�\�[�\�	��X���
+  // API key persistence + dot
+  document.getElementById('apiKey').addEventListener('input', e => {
+    const val = e.target.value.trim();
+    localStorage.setItem('hanse_api_key', val);
+    document.getElementById('apiDot').className = 'status-dot ' + (val ? 'ok' : 'err');
+  });
 
-HO����[�\�]J�˚Y
-JNܚY�\[��[
-�\�
-NJNB���[��[ۈ���[�\�]J�\��Y
-H�[X�Y�\��YH�\��Y�ۜ���H[�\��\˙�[�
-�O�˚YOOH�\��Y
-NY�
-��H��[Y[���][[Y[��RY
-	��[���\	�K��[YHH�˜��\\]Q�[��\���\�
-N�Y��\��Y�[�[
+  // Keyboard shortcut
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (!document.getElementById('genBtn').disabled) generate();
+    }
+    if (e.key === 'Escape') closeLightbox();
+  });
+})();
 
-N��]�X�	��[�\�]I�NB���[��[ۈY�\��P�\��
-H�ۜ��[YHH��\
-	Ә[YH\��]Y[��\��N��NY�
-[�[YH[�[YK��[J
-JH�]\���ۜ�X�ۈH��\
-	�[[ښHX�ۈ
-�[ۘ[
-N��	�'���H	�'����ۜ��\�T��\H��\
-	И\�\�T��\��	�YYY]�[�[YH\��]]Z[Y\��]Y	�H	�YYY]�[�[YH\��]	��ۜ�YH�[YK����\��\�J
-K��\X�J�����	���K��\X�J�טK^�NW�K��	��H
-�	���
-�]K����
-N[�\��\˜\�
-�Y�[YN��[YK��[J
-KX�ۋ��\��\�T��\JN�]�Q]J
-N�Z[�\��ܚY
+// ─── ADVANCED TOGGLE ─────────────────────────────────────────────────────────
+function toggleAdvanced() {
+  advOpen = !advOpen;
+  document.getElementById('advBody').classList.toggle('collapsed', !advOpen);
+  document.getElementById('advArrow').style.transform = advOpen ? 'rotate(180deg)' : '';
+}
 
-N�Z[�[��\���\�
-N��Y�J�\��H�ۘ[YK��[J
-_H�[��Y�Y���	����NB����8� 8� 8� �S��T���T�8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[�[��\���\�
-H�ۜ��۝Z[�\�H��[Y[���][[Y[��RY
-	��[��\���\��N�۝Z[�\��[��\�SH	��[�\��\˙�ܑXX�
-��O��ۜ��\H��[Y[��ܙX]Q[[Y[�
-	�]��N�ۜ�\ԙY�HHX�\�ԙY����˚YN�\��\�Ә[YHH	��\	�
-�
-�˚YOOH�[X�Y�\��Y�	�X�]�I��	��H
-�
-\ԙY��	����Y	��	��N�\�^�۝[�H
-\ԙY��	�'�$�	��	��H
-��˚X�ۈ
-�	�	�
-��˛�[YN�\�]\�]�YH�˚Y�\�Y]�[�\�[�\�	��X���
+// ─── PRESET LOADER ────────────────────────────────────────────────────────────
+function loadPreset(key) {
+  const p = PRESETS[key];
+  if (!p) return;
+  document.getElementById('prompt').value = p.prompt;
+  activeTags = new Set(p.tags);
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.toggle('active', activeTags.has(c.dataset.tag));
+  });
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === p.cat);
+  });
+  currentCat = p.cat;
+  showNotif(`Preset geladen: ${key}`, 'ok');
+}
 
-HO��[X�Y�\��YH�˚Y�ۜ��H[�\��\˙�[�
-O��YOOH�˚Y
-NY�
-�H��[Y[���][[Y[��RY
-	��[���\	�K��[YHH˜��\\]Q�[��\���\�
-N�Y��\��Y�[�[
+// ─── BUILD PROMPT ─────────────────────────────────────────────────────────────
+function buildPrompt(userPrompt) {
+  const tagStr = [...activeTags].join(', ');
+  const base = userPrompt.trim() || CAT_PROMPTS[currentCat] || 'hanseatic medieval scene';
+  return `${base}, ${tagStr}, ${STYLE_BASE}`;
+}
 
-NJN�۝Z[�\��\[��[
-�\
-NJNB���[��[ۈ\]Q�[��\���\�
-H��[Y[��]Y\�T�[X�ܐ[
-	���[��\���\���\	�K��ܑXX�
-�\O��ۜ���H[�\��\˙�[�
-�O�˚YOOH�\�]\�]�Y
-NY�
-X��H�]\���ۜ�\ԙY�HHX�\�ԙY����˚YN�\��\�Ә[YHH	��\	�
-�
-�\�]\�]�YOOH�[X�Y�\��Y�	�X�]�I��	��H
-�
-\ԙY��	����Y	��	��N�\�^�۝[�H
-\ԙY��	�'�$�	��	��H
-��˚X�ۈ
-�	�	�
-��˛�[YNJNB����8� 8� 8� �SHQ��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[�[UY��\�
-H�ۜ��۝Z[�\�H��[Y[���][[Y[��RY
-	��[UY��\��N�۝Z[�\��[��\�SH	���SW�Q�˙�ܑXX�
-Y�O��ۜ��\H��[Y[��ܙX]Q[[Y[�
-	�]��N�\��\�Ә[YHH	��\	�
-�
-X�]�T�[UY�˚\�Y�H�	�X�]�I��	��N�\�^�۝[�HY��\�Y]�[�\�[�\�	��X���
+// ─── GENERATE ─────────────────────────────────────────────────────────────────
+async function generate() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showNotif('API Key fehlt!', 'err'); return; }
 
-HO��\��\��\�����J	�X�]�I�NY�
-�\��\��\���۝Z[��	�X�]�I�JHX�]�T�[UY�˘Y
-Y�N[�HX�]�T�[UY�˙[]JY�NJN�۝Z[�\��\[��[
-�\
-NJNB����8� 8� 8� S�SԒQ8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[[�[ܚY
+  const userPrompt = document.getElementById('prompt').value;
+  const aspectVal = document.getElementById('aspect').value;
+  const [w, h] = aspectVal.split('x').map(Number);
+  const count = parseInt(document.getElementById('count').value);
+  const model = document.getElementById('model').value;
+  const negPrompt = document.getElementById('negPrompt').value.trim();
+  const fullPrompt = buildPrompt(userPrompt);
 
-H�ۜ�ܚYH��[Y[���][[Y[��RY
-	��[�[�[ܚY	�NܚY�[��\�SH	��S�S˙�ܑXX�
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generiere...';
+  setProgress(10, 'Starte Generation...');
 
-[�[JHO��ۜ��\�H��[Y[��ܙX]Q[[Y[�
-	�]��N�\���\�Ә[YHH	�[�[X�\�	�
-�
-HOOH�	�X�]�I��	��N�\��[��\�SH]��\��H�[�[[�[YH���[�[��[Y_O�]��]��\��H�[�[Y\�ȏ��[�[�\��O�]���\��Y]�[�\�[�\�	��X���
+  // Add loaders to gallery
+  const gallery = document.getElementById('gallery');
+  gallery.querySelectorAll('.empty').forEach(e => e.remove());
+  const loaders = [];
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'loading-card';
+    card.innerHTML = '<div class="spinner"></div><div class="loading-text">Generiere...</div>';
+    gallery.prepend(card);
+    loaders.push(card);
+  }
 
-HO�ܚY�]Y\�T�[X�ܐ[
-	˛[�[X�\�	�K��ܑXX�
-�O�˘�\��\���[[ݙJ	�X�]�I�JN�\���\��\��Y
-	�X�]�I�N�[X�Y[�[YH[�[�YJNܚY�\[��[
-�\�
-NJNB����8� 8� 8� �Q�S�S8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Y��\��Y�[�[
+  try {
+    // POST to Leonardo
+    const res = await fetch('https://cloud.leonardo.ai/api/rest/v1/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        prompt: fullPrompt,
+        negative_prompt: negPrompt,
+        modelId: model,
+        width: w,
+        height: h,
+        num_images: count,
+        public: false,
+        promptMagic: false
+      })
+    });
 
-H�ۜ��Y�H�\�ԙY����[X�Y�\��YN�ۜ���H[�\��\˙�[�
-�O�˚YOOH�[X�Y�\��Y
-N�ۜ��۝[�H��[Y[���][[Y[��RY
-	ܙY��ۙP�۝[�	�N�ۜ���[��ܛ�\H��[Y[���][[Y[��RY
-	���[��ܛ�\	�N�ۜ�\�T�Y��X��H��[Y[���][[Y[��RY
-	�\�T�Y��N�Y�
-�Y�H�۝[��[��\�SH�]��\��H��Y�^�ۙH���[Y��\��H��Y�][X��ܘ�H�ܙY��\�H�[H��Y�\�[���ۙ\��܏H�\˜�[K�\�^OIۛۙIȏ��]��\��H��Y�^�ۙKZ[��ȏ��]��\��H��Y�^�ۙK]]H��'�$�	�����˛�[YH�	��H8�$��Y�\�[��Z�]��]���]��\��H��Y�^�ۙK\�X����\�]��	ۙ]�]J�Y�����Y]
-K����[T��[��	�KQI�_O�]���	ܙY��X�[�]��\��H��Y�^�ۙK\�X���[OH�X\��[�]�����ܙY��X�[O�]���	��B��]����]ۈ�\��H�����Y�����\�H�ۘ�X��H��X\��Y�	���[X�Y�\��YI�H��'��H[��\��[�؝]ۏ���]����[��ܛ�\��[K�\�^HH	؛����\�T�Y��X�˘�X��YH�YNH[�H�۝[��[��\�SH]��[OH��۝\�^�N����[N���܎��\�K[]]Y
-H������Z[�H�Y�\�[�������ۙ��[OH���܎��\�K]^
-H�������˛�[YH�	�Y\�H�\��I�O���ۙψ�\�]���������[�\�Y\�H�[\�8����X��<'�$�[�\��[\�YH8����]�H\��\�H[��Y�\�[���[���]�[�[H�Z����Y�[��[�\�Y\�[��[�Y\�\��\��HY\�\��[[�[Y̚[Y�T�[�ܛY�K��]����[��ܛ�\��[K�\�^HH	ۛۙI�\�T�Y��X�˘�X��YH�[�NB�B����8� 8� 8� �T���Q��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�]�Y��\��Y\�X�[
-H�\�ԙY����\��YHH�\�X�[�X�[	�����Y]��]�]J
-K��T����[��
-HN�]�Q]J
-N�Z[�\��ܚY
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
+    }
 
-N\]Q�[��\���\�
-NY�
-�[X�Y�\��YOOH�\��Y
-H�Y��\��Y�[�[
+    const data = await res.json();
+    const genId = data.sdGenerationJob?.generationId;
+    if (!genId) throw new Error('Keine Generation-ID erhalten');
 
-N�ۜ���H[�\��\˙�[�
-�O�˚YOOH�\��Y
-N��Y�J<'�$�[�	�����˛�[YH��\��YKT�Y�\�[���\�]�8�$�	����NB���[��[ۈ�X\��Y��\��Y
-H[]H�\�ԙY����\��YN�]�Q]J
-N�Z[�\��ܚY
+    setProgress(30, 'Warte auf Ergebnisse...');
 
-N\]Q�[��\���\�
-N�Y��\��Y�[�[
+    // Poll
+    let images = [];
+    let attempts = 0;
+    while (attempts < 35 && images.length === 0) {
+      await sleep(2000);
+      attempts++;
+      setProgress(30 + attempts * 1.8, `Poll ${attempts}/35...`);
 
-N��Y�J	ԙY�\�[��[��\��	�	��\���NB����8� 8� 8� SPQ�HT�Q
-�܈[Y̚[Y�H8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ\�Y[XY�Q���U\�
-[XY�U\�\R�^JH�ۜ�[Yԙ\�H]�Z]�]�
-[XY�U\�
-NY�
-Z[Yԙ\˛��H����]�\��܊	ԙY�\�[���[�ۛ�H�X��[Y[��\�[��N�ۜ��؈H]�Z][Yԙ\˘�؊
-N�ۜ�^H�؋�\K�[��Y\�	����H�	�����	ڜ����ۜ�[�]�\�H]�Z]�]�
-	�T_K�[�]Z[XY�XY]��	���	��XY\�Έ�	��۝[�U\IΈ	�\X�][ۋڜ�ۉ�	�]]ܚ^�][ۉΈ�X\�\�	�\R�^_XK���N���Ӌ���[��Y�J�^[��[ێ�^JB�JNY�
-Z[�]�\˛��H����]�\��܊[�]R[XY�H	�[�]�\˜�]\�X
-N�ۜ�]HH]�Z][�]�\˚��ۊ
-N�ۜ��Y�Y[�\�HH]K�\�Y[�][XY�N��ۜ��ܛHH�]��ܛQ]J
-Nؚ�X��[��Y\���Ӌ�\��J�Y[�JK��ܑXX�
+      const pollRes = await fetch(`https://cloud.leonardo.ai/api/rest/v1/generations/${genId}`, {
+        headers: { 'authorization': `Bearer ${apiKey}` }
+      });
 
-���JHO��ܛK�\[�
-��JN�ܛK�\[�
-	ٚ[I��؊N�ۜ�\�Y�\�H]�Z]�]�
-\��Y]��	���	���N��ܛHJNY�
-]\�Y�\˛��	��\�Y�\˜�]\�OOH�
-H����]�\��܊	���\�Y�Z�\��Y�[��N��]\��YB����8� 8� 8� �S�T�UH8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ�[�\�]J
-H�ۜ�\R�^HH��[Y[���][[Y[��RY
-	�\R�^I�K��[YK��[J
-NY�
-X\R�^JH���Y�J	�TH�^H�ZI�	�\���N��]\���B��ۜ���\^H��[Y[���][[Y[��RY
-	��[���\	�K��[YK��[J
-NY�
-\��\^
-H���Y�J	���\Z[��X�[�I�	�\���N��]\���B���ۜ�\�T�Y�H��[Y[���][[Y[��RY
-	�\�T�Y��K��X��Y�ۜ��Y�H�\�ԙY����[X�Y�\��YN�ۜ���[�H\��R[�
-��[Y[���][[Y[��RY
-	��[���[�	�K��[YJN�ۜ���HH��[Y[���][[Y[��RY
-	��[��^�I�K��[YK��]
-	�	�K�X\
-�[X�\�N�ۜ�Y��Hˋ��X�]�T�[UY��K���[�	�	�N�ۜ��[��\HY���	���\^K	�Y��X���\^��ۜ���H��[Y[���][[Y[��RY
-	��[����N�ۜ��[H��[Y[���][[Y[��RY
-	��[��[	�N�ۜ���ܙ\��H��[Y[���][[Y[��RY
-	��[���ܙ\���N�ۜ��]\�H��[Y[���][[Y[��RY
-	��[��]\��N����\�X�YH�YN���^�۝[�H	�����\�K������ܙ\�˘�\��\��Y
-	�����N�[��[K��YH	�	I���ۜ���H[�\��\˙�[�
-�O�˚YOOH�[X�Y�\��Y
-N�ۜ��Y\�Y�H�N��]�X�	��[\�I�N�܈
-]HH�H��[��J��H�ۜ�YH�[�I�]K����
-_KI�_XY�Y\�Y	�����˛�[YH�	�\��]	�H��H
-�_X
-N�Y\�Y˜\�
-Y
-NB��][�][XY�RYH�[Y�
-\�T�Y�	���Y�H�H���^�۝[�H	��!��#��Y�\�[���\��[Y[������]\˝^�۝[�H	��[T�Y�\�[���\��H[ۘ\�����[Y[������[��[K��YH	�N	I�[�][XY�RYH]�Z]\�Y[XY�Q���U\�
-�Y��\�\R�^JN�[��[K��YH	̎	I��]\˝^�۝[�H	ԙY�\�[�����[Y[�8�$��H�]�
-JH�]\˝^�۝[�H	����Y�J�Y�\�[��U\�Y�Z�\��Y�[�
-	�K�Y\��Y�_JH8�$��[�\�Y\�H��H�Y�\�[��	��\���NB�B�����^�۝[�H	�����[�\�Y\�K�����]\˝^�۝[�H	��[�\�][ۈ0�Y������[��[K��YH	��II���H�ۜ���HH��\��[��\��Y�]]�W���\��Q��[�[Y��[X�Y[�[Y��Y���ZY����[W�[XY�\Έ��[��X�XΈ�[�K�NY�
-[�][XY�RY
-H��K�[�]�[XY�W�YH[�][XY�RY��K�[�]���[��H\��Q��]
-��[Y[���][[Y[��RY
-	ܙY���[��	�K��[YJNB���ۜ��\�H]�Z]�]�
-	�T_K��[�\�][ۜ�Y]��	���	��XY\�Έ�	��۝[�U\IΈ	�\X�][ۋڜ�ۉ�	�]]ܚ^�][ۉΈ�X\�\�	�\R�^_XK���N���Ӌ���[��Y�J��JB�JNY�
-\�\˛��H�ۜ�\��^H]�Z]�\˝^
+      if (!pollRes.ok) continue;
+      const pollData = await pollRes.json();
+      const gen = pollData.generations_by_pk;
 
-N����]�\��܊	ܙ\˜�]\�N�	�\��^��X�JL�
-_X
-NB��ۜ�]HH]�Z]�\˚��ۊ
-N�ۜ��[�YH]K���[�\�][ے�؏˙�[�\�][ےYY�
-Y�[�Y
-H����]�\��܊	��Z[�H�[�\�][ۋRQ\�[[��N��[��[K��YH	�L	I��]\˝^�۝[�H	��\�H]Y�\��X��\ˋ����ۜ�[XY�\�H]�Z]��[�\�][ۊ�[�Y\R�^JN�[��[K��YH	�MII���Y\�Y˙�ܑXX�
-YO��[[ݙS�Y\�Y
-JN[XY�\˙�ܑXX�
+      if (gen?.status === 'COMPLETE') {
+        images = gen.generated_images || [];
+        break;
+      } else if (gen?.status === 'FAILED') {
+        throw new Error('Generierung fehlgeschlagen');
+      }
+    }
 
-[Y�JHO��[\�P��[�
-���ۜ�X�[H	�����˛�[YH�	�\��]	�H���[\�P��[�X�ۜ��[[�[YHH[��W���[X�Y�\��YW��]K����
-_W��H
-�_K���Y[XY�P�\�
-[Y˝\��[[�[YKX�[�[X�Y�\��Y
-NJN\]Q�[��[��
-N�[��[K��YH	�L	I��]\˝^�۝[�H	���][Y[�]
+    if (images.length === 0) throw new Error('Timeout – bitte erneut versuchen');
 
+    setProgress(96, 'Fast fertig...');
+    loaders.forEach(l => l.remove());
 
-HO����ܙ\�˘�\��\���[[ݙJ	�����N��[��[K��YH	�	I��K
-N��Y�J	�[XY�\˛[��H	�����˛�[YH�	�\��]��H�[�\�Y\�8�$�	����N�H�]�
-JH�Y\�Y˙�ܑXX�
-YO��[[ݙS�Y\�Y
-JN�]\˝^�۝[�H	����Y�J�Z\��	�K�Y\��Y�_X	�\���N��ܙ\�˘�\��\���[[ݙJ	�����N�[��[K��YH	�	I�B�����\�X�YH�[�N���^�۝[�H	���H�[�\�Y\�[��B����8� 8� 8� �S��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ��[�\�][ۊ�[�Y\R�^KX^][\�H
-
-H�܈
-]HH�HX^][\��J��H]�Z]�]���Z\�J�O��][Y[�]
-��L
-JN�ۜ��\�H]�Z]�]�
-	�T_K��[�\�][ۜ����[�YXXY\�Έ�	�]]ܚ^�][ۉΈ�X\�\�	�\R�^_XB�JN�ۜ�]HH]�Z]�\˚��ۊ
-N�ۜ��[�H]K��[�\�][ۜ�؞W��Y�
-�[�˜�]\�OOH	���TUI�H�]\���[���[�\�]Y�[XY�\��NY�
-�[�˜�]\�OOH	ѐRSQ	�H����]�\��܊	�[ۘ\�Έ�[�\�Y\�[���Z�\��Y�[��NB�����]�\��܊	�[Y[�]8�$�[ۘ\��[��ܝ]�X�	�NB����8� 8� 8� �ST�H8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�]�[\�J
-H�ۜ��H��[Y[���][[Y[��RY
-	��[\�I�N�ۜ�[\HH˜]Y\�T�[X�܊	˙[\I�NY�
-[\JH[\K��[[ݙJ
-N�]\���B���[��[ۈY�Y\�YX�[
-H�ۜ�]�H��[Y[��ܙX]Q[[Y[�
-	�]��N]���\�Ә[YHH	��Y\���]��YHY]��[��\�SH]��\��H��[��\����]��]��\��H��Y\�]^���X�[O�]���]�[\�J
-K��\[�
-]�NB���[��[ۈ�[[ݙS�Y\�Y
-H�ۜ�[H��[Y[���][[Y[��RY
-Y
-NY�
-[
-H[��[[ݙJ
-NB���[��[ۈY[XY�P�\�
-\��[[�[YKX�[�\��Y
-H�ۜ��Y�U\�H\���\X�J�����	ȊN�ۜ��Y�Q�[[�[YHH�[[�[YK��\X�J�����	ȊN�ۜ��Y�SX�[HX�[��\X�J�����	ȊN��ۜ��\���[ۜ�H[�\��\˛X\
-�O��]��\��H����[Y[�KZ][H�ۘ�X��H��]�Y�	��˚YI�	���Y�U\�I�	���Y�SX�[I�N����S���Y[�\�
-H���	�˚X�۟H	�˛�[Y_B��]���
-K���[�	��N��ۜ��\�H��[Y[��ܙX]Q[[Y[�
-	�]��N�\���\�Ә[YHH	�[Y�X�\�	��\��[��\�SH�[Y�ܘ�H��\�H�[H�ٚ[[�[Y_H��Y[��H�^�H�ۘ�X��H��[�Y���
-	���Y�U\�I�H���]��\��H�[Y�XX�[ۜȏ���[��\��H�[Y�[X�[���X�[O��[����]ۈ�\��H�X�ۋX���]OH��ۛ�Y�ۘ�X��H�[Y�	���Y�U\�I�	���Y�Q�[[�[Y_I�H���!�؝]ۏ��]��\��H����Y���ۈ����]ۈ�\��H����X���ۘ�X��H����S���Y[�J\�H��'�$�؝]ۏ��]��\��H����[Y[�H���]��[OH�Y[�΍�Mٛ۝\�^�N��ܙ[N���܎��\�K[]]Y
-N؛ܙ\�X���N�\��Y�\�KX�ܙ\�H��[��Y�\�[�������]���	��\���[ۜ�B��]����]����]���]�[\�J
-K��\[�
-�\�
-NB���[��[ۈ���S���Y[�J��H�ۜ�Y[�HH����^[[Y[��X�[���ۜ��\��[�HY[�K��\��\���۝Z[��	��[��N���S���Y[�\�
-NY�
-]�\��[�HY[�K��\��\��Y
-	��[��NB���[��[ۈ���S���Y[�\�
-H��[Y[��]Y\�T�[X�ܐ[
-	˛���[Y[�K��[��K��ܑXX�
-HO�K��\��\���[[ݙJ	��[��JNB����[Y[��Y]�[�\�[�\�	��X���HO�Y�
-YK�\��]����\�
-	˛���Y���ۉ�JH���S���Y[�\�
-NJN��[��[ۈ\]Q�[��[��
-H��[Y[���][[Y[��RY
-	��[��[�	�K�^�۝[�H�[\�P��[���[Y[���][[Y[��RY
-	��[��[��Y��K�^�۝[�H�[\�P��[�B����8� 8� 8� Q���8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�[�Y���
-\�
-H��[Y[���][[Y[��RY
-	�Y���[Y��K�ܘ�H\���[Y[���][[Y[��RY
-	�Y���	�K��\��\��Y
-	�����NB��[��[ۈ���SY���
+    images.forEach((img, i) => {
+      const filename = `hanse_${currentCat}_${Date.now()}_${i + 1}.png`;
+      totalGenerated++;
+      addImageCard(gallery, img.url, filename, totalGenerated, fullPrompt);
+    });
 
-H���[Y[���][[Y[��RY
-	�Y���	�K��\��\���[[ݙJ	�����N�B���[Y[��Y]�[�\�[�\�	��^Y�ۉ�HO��Y�
-K��^HOOH	�\��\I�H���SY���
+    document.getElementById('countBadge').textContent = totalGenerated;
+    setProgress(100, 'Fertig!');
+    setTimeout(() => hideProgress(), 900);
+    showNotif(`${images.length} Asset${images.length > 1 ? 's' : ''} generiert ✓`, 'ok');
 
-N�JN���8� 8� 8� �ӓ�Q8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ[Y�\��[[�[YJH�H�ۜ��\�H]�Z]�]�
-\�
-N�ۜ��؈H]�Z]�\˘�؊
-N�ۜ�HH��[Y[��ܙX]Q[[Y[�
-	�I�NK��Y�HT��ܙX]Sؚ�X�T�
-�؊NK��ۛ�YH�[[�[YNK��X��
-N��Y�J�ٚ[[�[Y_H��\�ZX�\�	����NH�]���[��˛�[�\�	�؛[���N�B�B���[��[ۈ�ۛ�Y[
+  } catch (err) {
+    loaders.forEach(l => l.remove());
+    if (gallery.children.length === 0) {
+      gallery.innerHTML = `<div class="empty"><div class="big">⚠️</div><p>${err.message}</p></div>`;
+    }
+    hideProgress();
+    showNotif(`Fehler: ${err.message}`, 'err');
+    console.error('[HANSE]', err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Generieren';
+  }
+}
 
-H�ۜ�[Y��H��[Y[��]Y\�T�[X�ܐ[
-	˚[Y�X�\�[Y��NY�
-Z[Y�˛[��
-H���Y�J	��Z[�H�[\��	�\���N��]\���B�[Y�˙�ܑXX�
+// ─── IMAGE CARD ───────────────────────────────────────────────────────────────
+function addImageCard(gallery, url, filename, num, prompt) {
+  const card = document.createElement('div');
+  card.className = 'img-card';
+  card.innerHTML = `
+    <img src="${url}" alt="${filename}" loading="lazy" onclick="openLightbox('${url}')">
+    <div class="img-meta">
+      <span class="img-num">#${num}</span>
+      <div class="img-actions">
+        <button class="icon-btn" title="Download" onclick="event.stopPropagation();dlImg('${url}','${filename}')">⬇</button>
+        <button class="icon-btn" title="Prompt kopieren" onclick="event.stopPropagation();copyPrompt(\`${prompt.replace(/`/g, '\\`')}\`)">📋</button>
+      </div>
+    </div>
+  `;
+  gallery.prepend(card);
+}
 
-[Y�JHO��][Y[�]
+// ─── LIGHTBOX ─────────────────────────────────────────────────────────────────
+function openLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
 
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+}
 
-HO�[Y�[Y˜ܘ�[Y˘[[��W��H
-�_K���
-KH
-�
-�
-JNB���[��[ۈ�X\��[\�J
-HY�
-X�ۙ�\�J	��[\�YHY\�[��
-�[T�Y�\�[��[��ZX�[�\�[[�I�JH�]\����[Y[���][[Y[��RY
-	��[\�I�K�[��\�SH	�]��\��H�[\H��]��\��H�X�ۈ������]�������Z[�H\��]��[�\�Y\����]����[\�P��[�H\]Q�[��[��
-NB����8� 8� 8� P��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ��]�X��[YJH�ۜ��[Y\�H���\��\��	��[�\�]I�	��[\�I�N��[Y[��]Y\�T�[X�ܐ[
-	˝X��K��ܑXX�
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-JHO���\��\�����J	�X�]�I��[Y\��WHOOH�[YJJN��[Y[��]Y\�T�[X�ܐ[
-	˝X�X�۝[�	�K��ܑXX�
-�O�˘�\��\�����J	�X�]�I�˚YOOHX�Iۘ[Y_X
-JNB����8� 8� 8� ��Q�H8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ��Y�J\��\HH	����H�ۜ��H��[Y[���][[Y[��RY
-	ۛ�Y��N��^�۝[�H\�����\�Ә[YHH��Y�	�\_H����X\�[Y[�]
-���
-N���H�][Y[�]
+function setProgress(pct, label) {
+  document.getElementById('progressWrap').classList.add('show');
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+  if (label) document.getElementById('progressLabel').textContent = label;
+}
 
+function hideProgress() {
+  setTimeout(() => {
+    document.getElementById('progressWrap').classList.remove('show');
+    document.getElementById('progressFill').style.width = '0%';
+  }, 400);
+}
 
-HO����\��\���[[ݙJ	�����K�L
-NB��[�]
+async function dlImg(url, filename) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    showNotif(`"${filename}" gespeichert`, 'ok');
+  } catch {
+    window.open(url, '_blank');
+  }
+}
 
-N��ܚ\��؛�O���[�
+function downloadAll() {
+  const imgs = document.querySelectorAll('.img-card img');
+  if (!imgs.length) { showNotif('Keine Bilder vorhanden', 'err'); return; }
+  imgs.forEach((img, i) => {
+    setTimeout(() => dlImg(img.src, `hanse_asset_${i + 1}.png`), i * 600);
+  });
+  showNotif(`${imgs.length} Bilder werden geladen...`, 'ok');
+}
+
+function copyPrompt(prompt) {
+  navigator.clipboard.writeText(prompt)
+    .then(() => showNotif('Prompt kopiert!', 'ok'))
+    .catch(() => showNotif('Kopieren fehlgeschlagen', 'err'));
+}
+
+function clearGallery() {
+  document.getElementById('gallery').innerHTML = `<div class="empty"><div class="big">⚓</div><p>Kategorie wählen und auf <strong>Generieren</strong> klicken.</p></div>`;
+  totalGenerated = 0;
+  document.getElementById('countBadge').textContent = '0';
+}
+
+function showNotif(msg, type = 'ok') {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = `notif ${type} show`;
+  clearTimeout(n._t);
+  n._t = setTimeout(() => n.classList.remove('show'), 3200);
+}
+</script>
+</body>
+</html>
