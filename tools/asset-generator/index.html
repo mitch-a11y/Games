@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HANSE Asset Generator</title>
+<style>
+:root {
+  --bg: #0e0c09; --surface: #1a1610; --surface2: #241e14;
+  --border: #3d3020; --accent: #c8922a; --accent2: #e6b84a;
+  --text: #e8dcc8; --muted: #8a7a5c; --ok: #4a9e6a; --err: #c84a4a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; padding: 24px; }
+header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.06em; color: var(--accent2); }
+.badge { font-size: 0.75rem; color: var(--muted); background: var(--surface2); padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); }
+.layout { display: grid; grid-template-columns: 360px 1fr; gap: 24px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.panel h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px; }
+label { display: block; font-size: 0.78rem; color: var(--muted); margin: 12px 0 5px; }
+label:first-of-type { margin-top: 0; }
+input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 0.86rem; font-family: inherit; outline: none; transition: border-color 0.15s; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+select option { background: #1a1610; }
+
+/* TABS */
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.83rem; cursor: pointer; transition: all 0.15s; }
+.tab:hover { border-color: var(--accent); color: var(--text); }
+.tab.active { border-color: var(--accent2); background: #2e2210; color: var(--accent2); font-weight: 600; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* SHIP GRID */
+.ship-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ship-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.ship-card:hover { border-color: var(--accent); }
+.ship-card.active { border-color: var(--accent2); background: #2e2210; }
+.ship-card img { width: 100%; height: 70px; object-fit: contain; image-rendering: pixelated; }
+.ship-card span { font-size: 0.72rem; color: var(--muted); display: block; margin-top: 6px; }
+.ship-card.active span { color: var(--accent2); }
+
+/* ANGLE GRID */
+.angle-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.angle-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 4px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.angle-btn:hover { border-color: var(--accent); }
+.angle-btn.active { border-color: var(--accent2); background: #2e2210; }
+.angle-btn .dir-icon { font-size: 1.2rem; display: block; }
+.angle-btn .dir-label { font-size: 0.65rem; color: var(--muted); margin-top: 3px; }
+.angle-btn.active .dir-label { color: var(--accent2); }
+.angle-btn.has-asset { border-color: var(--ok); }
+.angle-btn.has-asset .dir-label { color: var(--ok); }
+
+/* REFERENCE */
+.ref-preview { width: 100%; height: 120px; background: var(--surface2); border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; cursor: pointer; transition: border-color 0.15s; }
+.ref-preview:hover { border-color: var(--accent); }
+.ref-preview img { width: 100%; height: 100%; object-fit: contain; }
+.ref-preview .placeholder { color: var(--muted); font-size: 0.8rem; text-align: center; line-height: 1.6; }
+.ref-preview input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* STYLE TAGS */
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 0.73rem; cursor: pointer; color: var(--muted); transition: all 0.15s; }
+.tag:hover { border-color: var(--accent); color: var(--text); }
+.tag.on { border-color: var(--accent2); background: #2e2210; color: var(--accent2); }
+
+/* BUTTONS */
+.btn-primary { width: 100%; padding: 13px; background: linear-gradient(135deg, #b07820, var(--accent2)); border: none; border-radius: 10px; color: #0e0c09; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 16px; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(200,146,42,0.3); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-sm { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+/* PROGRESS */
+.progress { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 12px; display: none; }
+.progress.show { display: block; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.4s; }
+
+/* GALLERY */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.img-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
+.img-card:hover { border-color: var(--accent); }
+.img-card img { width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--surface2); display: block; }
+.img-meta { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+.img-meta .name { font-size: 0.7rem; color: var(--muted); }
+.img-actions { display: flex; gap: 5px; }
+.icon-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s; color: var(--text); }
+.icon-btn:hover { border-color: var(--accent); }
+.loader { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent2); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-text { font-size: 0.72rem; color: var(--muted); }
+.empty { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty .icon { font-size: 3rem; margin-bottom: 12px; }
+
+/* NOTIF */
+.notif { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 0.84rem; max-width: 300px; transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 999; pointer-events: none; }
+.notif.show { transform: translateY(0); opacity: 1; }
+.notif.ok { border-color: var(--ok); }
+.notif.err { border-color: var(--err); }
+
+/* SHIP ANGLE STATUS */
+.angle-status { display: grid; grid-template-columns: repeat(8,1fr); gap: 4px; margin-top: 10px; }
+.as-dot { height: 6px; border-radius: 3px; background: var(--border); }
+.as-dot.filled { background: var(--ok); }
+.as-dot.selected { background: var(--accent2); }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.4rem">â</span>
+  <h1>HANSE Asset Generator</h1>
+  <span class="badge">Leonardo AI Â· img2img</span>
+</header>
+
+<div class="layout">
+  <!-- LEFT PANEL -->
+  <div>
+    <!-- API KEY -->
+    <div class="panel">
+      <h2>API Key</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="password" id="apiKey" placeholder="Leonardo API Key..." value="2413c563-72cd-4db0-b684-84426d196786">
+        <div id="apiDot" style="width:10px;height:10px;border-radius;50%;background:var(--ok);flex-shrink:0"></div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('ships')">âµ Schiffe</button>
+      <button class="tab" onclick="switchTab('general')">ð¨ Allgemein</button>
+    </div>
+
+    <!-- SHIPS TAB -->
+    <div id="tab-ships" class="tab-content active">
+      <div class="panel">
+        <h2>1 Â· Schiffstyp wÃ¤hlen</h2>
+        <div class="ship-grid" id="shipGrid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>2 Â· Referenz-Bild</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">Bestehendes Schiffsbild als Stilvorlage (img2img). Das hÃ¤lt den Stil konsistent.</p>
+        <div class="ref-preview" id="refPreview" onclick="document.getElementById('refFile').click()">
+          <div class="placeholder" id="refPlaceholder">ð Klick zum Hochladen<br><small>oder Schiff oben wÃ¤hlen</small></div>
+          <input type="file" id="refFile" accept="image/*" onchange="loadRefFile(this)" style="display:none">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-sm" onclick="useExistingShip()" id="useExistingBtn" style="flex:1" disabled>Bestehendes verwenden</button>
+          <button class="btn-sm" onclick="clearRef()" style="flex:0">â</button>
+        </div>
+
+        <label style="margin-top:14px">Img2Img StÃ¤rke</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="imgStrength" min="0.1" max="0.9" step="0.05" value="0.45" style="background:transparent;border:none;padding:0;flex:1;accent-color:var(--accent2)">
+          <span id="strengthVal" style="font-size:0.8rem;color:var(--accent2);min-width:32px">0.45</span>
+        </div>
+        <p style="font-size:0.7rem;color:var(--muted);margin-top:4px">Niedrig = Ã¤hnlicher dem Referenz Â· Hoch = mehr KI-KreativitÃ¤t</p>
+      </div>
+
+      <div class="panel">
+        <h2>3 Â· Winkel / Richtungen</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">8 Richtungen (0-7) fÃ¼r die Kartenansicht. WÃ¤hle die die du generieren willst.</p>
+        <div class="angle-grid" id="angleGrid">
+          <!-- filled by JS -->
+        </div>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <button class="btn-sm" onclick="selectAllAngles()" style="flex:1">Alle wÃ¤hlen</button>
+          <button class="btn-sm" onclick="selectCardinalAngles()" style="flex:1">Kardinal (4)</button>
+          <button class="btn-sm" onclick="clearAngles()" style="flex:1">Leeren</button>
+        </div>
+        <!-- Progress dots for existing files -->
+        <div style="margin-top:12px">
+          <div style="font-size:0.7rem;color:var(--muted);margin-bottom:5px">Existierende Dateien:</div>
+          <div class="angle-status" id="angleStatus">
+            <!-- filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>4 Â· Prompt & Stil</h2>
+        <label>Zusatz-Prompt (optional)</label>
+        <textarea id="shipPrompt" rows="2" placeholder="z.B. 'blue hull, weathered wood, rough sea'"></textarea>
+        <label>Stil</label>
+        <div class="tags" id="shipTags">
+          <span class="tag on" data-t="detailed game sprite">Game Sprite</span>
+          <span class="tag on" data-t="transparent background, isolated">Transparent</span>
+          <span class="tag on" data-t="medieval hanseatic 15th century">Hanseatisch</span>
+          <span class="tag" data-t="pixel art 16bit">Pixel Art</span>
+          <span class="tag" data-t="oil painting texture">Ã¶lgemÃ¤lde</span>
+          <span class="tag" data-t="pencil sketch outline">Sketch</span>
+        </div>
+        <div class="row2" style="margin-top:12px">
+          <div>
+            <label>GrÃ¶Ãe</label>
+            <select id="shipSize">
+              <option value="512x512" selected>512Ã512</option>
+              <option value="768x768">768Ã768</option>
+              <option value="1024x1024">1024Ã1024</option>
+            </select>
+          </div>
+          <div>
+            <label>Modell</label>
+            <select id="shipModel">
+              <option value="b24e16ff-06e3-43eb-8d33-4416c2d75876" selected>Leonardo Diffusion XL</option>
+              <option value="6bef9f1b-29cb-40c7-b9df-32b51c1f67d3">Leonardo Creative</option>
+              <option value="5c232a9e-9061-4777-980a-ddc8e65647c6">DreamShaper v7</option>
+              <option value="aa77f04e-3eec-4034-9c07-d0f619684628">Kino XL</option>
+            </select>
+          </div>
+        </div>
+        <div class="progress" id="shipProgress"><div class="progress-fill" id="shipFill"></div></div>
+        <button class="btn-primary" id="shipGenBtn" onclick="generateShipAngles()">â¡ Winkel generieren</button>
+      </div>
+    </div>
+
+    <!-- GENERAL TAB -->
+    <div id="tab-general" class="tab-content">
+      <div class="panel">
+        <h2>Kategorie</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="ship-card" onclick="setGenCat(this,'cities')" style="padding:12px">ð°<br><small>StÃ¤dte</small></button>
+          <button class="ship-card" onclick="setGenCat(this,'goods')" style="padding:12px">ð¦<br><small>Waren</small></button>
+          <button class="ship-card" onclick="setGenCat(this,'ui')" style="padding:12px">ð¨<br><small>UI-Elemente</small></button>
+          <button class="ship-card" onclick="setGenCat(this,'backgrounds')" style="padding:12px">ð<br><small>HintergrÃ¼nde</small></button>
+          <button class="ship-card" onclick="setGenCat(this,'characters')" style="padding:12px">ð§<br><small>Charaktere</small></button>
+          <button class="ship-card active" onclick="setGenCat(this,'custom')" style="padding:12px">âï¸<br><small>Eigener</small></button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Prompt</h2>
+        <textarea id="genPrompt" rows="3" placeholder="Beschreibe das Asset..."></textarea>
+        <label>Stil-Tags</label>
+        <div class="tags" id="genTags">
+          <span class="tag on" data-t="medieval hanseatic style">Hanseatisch</span>
+          <span class="tag on" data-t="detailed illustration">Detailliert</span>
+          <span class="tag" data-t="transparent background">Transparent</span>
+          <span class="tag" data-t="pixel art">Pixel Art</span>
+          <span class="tag" data-t="oil painting">ÃlgemÃ¤lde</span>
+          <span class="tag" data-t="isometric">Isometrisch</span>
+          <span class="tag" data-t="top down view">Top-Down</span>
+          <span class="tag" data-t="sepia aged paper">Sepia</span>
+        </div>
+        <div class="row2" style="margin-top:12px">
+          <div><label>Format</label>
+            <select id="genSize">
+              <option value="512x512">512Ã512</option>
+              <option value="768x512">768Ã512</option>
+              <option value="512x768">512Ã768</option>
+              <option value="1024x1024">1024Ã1024</option>
+            </select>
+          </div>
+          <div><label>Anzahl</label>
+            <select id="genCount">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="4" selected>4</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:8px">
+          <div><label>Modell</label>
+            <select id="genModel">
+              <option value="b24e16ff-06e3-43eb-8d33-4416c2d75876" selected>Diffusion XL</option>
+              <option value="6bef9f1b-29cb-40c7-b9df-32b51c1f67d3">Creative</option>
+              <option value="5c232a9e-9061-4777-980a-ddc8e65647c6">DreamShaper v7</option>
+            </select>
+          </div>
+        </div>
+        <div class="progress" id="genProgress"><div class="progress-fill" id="genFill"></div></div>
+        <button class="btn-primary" id="genBtn" onclick="generateGeneral()">â¡ Generieren</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: GALLERY -->
+  <div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2>Generierte Assets <span style="background:var(--accent);color:#0e0c09;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px" id="galCount">0</span></h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm" onclick="downloadAll()">â¬ Alle laden</button>
+          <button class="btn-sm" onclick="clearGallery()">ð Leeren</button>
+        </div>
+      </div>
+      <div class="gallery" id="gallery">
+        <div class="empty"><div class="icon">â</div><p>Schiffstyp wÃ¤hlen â Referenz setzen â Winkel wÃ¤hlen â Generieren</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// ââ CONFIG ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+const API = 'https://cloud.leonardo.ai/api/rest/v1';
+const NEG = 'blurry, low quality, watermark, text, signature, modern, futuristic, distorted';
+const STYLE_BASE = '15th century Baltic hanseatic era, high quality game art';
+
+const SHIPS = [
+  { id: 'cog',       name: 'Kogge',      file: 'assets/ship_cog.png' },
+  { id: 'small_cog', name: 'Kleine K.',  file: 'assets/ship_small_cog.png' },
+  { id: 'caravel',   name: 'Karavelle',  file: 'assets/ship_caravel.png' },
+  { id: 'carrack',   name: 'Karracke',   file: 'assets/ship_carrack.png' },
+  { id: 'hulk',      name: 'Hulk',       file: 'assets/ship_hulk.png' },
+  { id: 'boat',      name: 'Boot',       file: 'assets/ship_boat.png' },
+];
+
+const DIRS = [
+  { idx: 0, label: 'N',  icon: 'â¬' },
+  { idx: 1, label: 'NE', icon: 'â' },
+  { idx: 2, label: 'E',  icon: 'â¡' },
+  { idx: 3, label: 'SE', icon: 'â' },
+  { idx: 4, label: 'S',  icon: 'â¬' },
+  { idx: 5, label: 'SW', icon: 'â' },
+  { idx: 6, label: 'W',  icon: 'â¬' },
+  { idx: 7, label: 'NW', icon: 'â' },
+];
+
+const ANGLE_PROMPTS = {
+  0: 'sailing ship facing directly upward from below, top-down slight angle, bow pointing up',
+  1: 'sailing ship facing northeast, 45 degree angle, three-quarter view from front-right',
+  2: 'sailing ship facing right, direct side profile view, starboard side visible',
+  3: 'sailing ship facing southeast, 45 degree angle, three-quarter view from rear-right',
+  4: 'sailing ship facing directly down, seen from above, stern pointing down',
+  5: 'sailing ship facing southwest, 45 degree angle, three-quarter view from rear-left',
+  6: 'sailing ship facing left, direct side profile view, port side visible, mirrored',
+  7: 'sailing ship facing northwest, 45 degree angle, three-quarter view from front-left',
+};
+
+const CAT_PROMPTS = {
+  cities: 'medieval hanseatic city, half-timbered buildings, church tower, market square',
+  goods: 'medieval trade goods, barrels cloth salt fish amber, detailed items',
+  ui: 'medieval game UI element, parchment wood decorative border',
+  backgrounds: 'Baltic Sea coastline medieval harbor atmospheric wide angle',
+  characters: 'medieval merchant hanseatic trader portrait period clothing',
+  custom: '',
+};
+
+// ââ STATE âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+let selectedShip = null;
+let refImageId = null;
+let refDataUrl = null;
+let selectedAngles = new Set([2, 6]); // E and W by default
+let activeTabs_ship = new Set(['detailed game sprite', 'transparent background, isolated', 'medieval hanseatic 15th century']);
+let activeTabs_gen = new Set(['medieval hanseatic style', 'detailed illustration']);
+let genCat = 'custom';
+let galleryCount = 0;
+
+// ââ INIT ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function init() {
+  // Ship grid
+  const sg = document.getElementById('shipGrid');
+  SHIPS.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'ship-card';
+    card.dataset.id = s.id;
+    card.innerHTML = `
+      <img src="../../${s.file}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%2248%22 font-size=%2248%22>âµ</text></svg>'">
+      <span>${s.name}</span>
+    `;
+    card.onclick = () => selectShip(s, card);
+    sg.appendChild(card);
+  });
+
+  // Angle grid
+  const ag = document.getElementById('angleGrid');
+  const as = document.getElementById('angleStatus');
+  DIRS.forEach(d => {
+    const btn = document.createElement('div');
+    btn.className = 'angle-btn' + (selectedAngles.has(d.idx) ? ' active' : '');
+    btn.dataset.idx = d.idx;
+    btn.innerHTML = `<span class="dir-icon">${d.icon}</span><span class="dir-label">${d.label}</span>`;
+    btn.onclick = () => toggleAngle(d.idx, btn);
+    ag.appendChild(btn);
+
+    const dot = document.createElement('div');
+    dot.className = 'as-dot';
+    dot.id = `dot-${d.idx}`;
+    as.appendChild(dot);
+  });
+
+  // Tag listeners
+  document.querySelectorAll('#shipTags .tag').forEach(t => {
+    t.classList.toggle('on', activeTabs_ship.has(t.dataset.t));
+    t.onclick = () => { t.classList.toggle('on'); activeTabs_ship[t.classList.contains('on') ? 'add' : 'delete'](t.dataset.t); };
+  });
+  document.querySelectorAll('#genTags .tag').forEach(t => {
+    t.classList.toggle('on', activeTabs_gen.has(t.dataset.t));
+    t.onclick = () => { t.classList.toggle('on'); activeTabs_gen[t.classList.contains('on') ? 'add' : 'delete'](t.dataset.t); };
+  });
+
+  // Strength slider
+  document.getElementById('imgStrength').oninput = e => {
+    document.getElementById('strengthVal').textContent = parseFloat(e.target.value).toFixed(2);
+  };
+
+  // API key dot
+  document.getElementById('apiKey').oninput = e => {
+    document.getElementById('apiDot').style.background = e.target.value.trim() ? 'var(--ok)' : 'var(--err)';
+  };
+}
+
+// ââ SHIP SELECTION ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function selectShip(ship, card) {
+  selectedShip = ship;
+  document.querySelectorAll('.ship-card').forEach(c => c.classList.remove('active'));
+  card.classList.add('active');
+  document.getElementById('useExistingBtn').disabled = false;
+
+  // Update existing file status dots
+  updateAngleDots();
+}
+
+function updateAngleDots() {
+  if (!selectedShip) return;
+  // We can't check the actual FS from browser - just show all as unknown
+  // In real use these would be checked server-side
+  document.querySelectorAll('.as-dot').forEach(d => d.classList.remove('filled'));
+}
+
+// ââ ANGLE CONTROLS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function toggleAngle(idx, btn) {
+  if (selectedAngles.has(idx)) {
+    selectedAngles.delete(idx);
+    btn.classList.remove('active');
+  } else {
+    selectedAngles.add(idx);
+    btn.classList.add('active');
+  }
+}
+function selectAllAngles() {
+  DIRS.forEach(d => { selectedAngles.add(d.idx); document.querySelector(`.angle-btn[data-idx="${d.idx}"]`).classList.add('active'); });
+}
+function selectCardinalAngles() {
+  clearAngles();
+  [0, 2, 4, 6].forEach(idx => { selectedAngles.add(idx); document.querySelector(`.angle-btn[data-idx="${idx}"]`).classList.add('active'); });
+}
+function clearAngles() {
+  selectedAngles.clear();
+  document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
+}
+
+// ââ REFERENCE IMAGE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function useExistingShip() {
+  if (!selectedShip) return;
+  // Load the ship image from the repo path as reference
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width || 256;
+    canvas.height = img.height || 256;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    refDataUrl = canvas.toDataURL('image/png');
+    showRefPreview(refDataUrl);
+    notify(`Referenz gesetzt: ${selectedShip.name}`, 'ok');
+  };
+  img.onerror = () => notify('Bild nicht ladbar â bitte manuell hochladen', 'err');
+  img.src = `../../${selectedShip.file}?t=${Date.now()}`;
+}
+
+function loadRefFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { refDataUrl = e.target.result; showRefPreview(refDataUrl); notify('Referenz geladen â', 'ok'); };
+  reader.readAsDataURL(file);
+}
+
+function showRefPreview(dataUrl) {
+  const prev = document.getElementById('refPreview');
+  document.getElementById('refPlaceholder').style.display = 'none';
+  let img = prev.querySelector('img.ref-img');
+  if (!img) { img = document.createElement('img'); img.className = 'ref-img'; prev.insertBefore(img, prev.firstChild); }
+  img.src = dataUrl;
+}
+
+function clearRef() {
+  refDataUrl = null;
+  refImageId = null;
+  const prev = document.getElementById('refPreview');
+  const img = prev.querySelector('img.ref-img');
+  if (img) img.remove();
+  document.getElementById('refPlaceholder').style.display = '';
+}
+
+// ââ UPLOAD REFERENCE TO LEONARDO ââââââââââââââââââââââââââââââââââââââââââââ
+async function uploadReference(apiKey) {
+  if (!refDataUrl) return null;
+
+  // Convert dataURL to blob
+  const res = await fetch(refDataUrl);
+  const blob = await res.blob();
+
+  // Get presigned URL from Leonardo
+  const initRes = await fetch(`${API}/init-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({ extension: 'png' })
+  });
+  if (!initRes.ok) { console.warn('Init image failed'); return null; }
+  const initData = await initRes.json();
+  const { url, fields, id } = initData.uploadInitImage;
+
+  // Upload to S3
+  const form = new FormData();
+  Object.entries(fields).forEach(([k, v]) => form.append(k, v));
+  form.append('file', blob, 'reference.png');
+  await fetch(url, { method: 'POST', body: form });
+
+  return id;
+}
+
+// ââ GENERATE SHIP ANGLES âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+async function generateShipAngles() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { notify('API Key fehlt!', 'err'); return; }
+  if (!selectedShip) { notify('Schiff wÃ¤hlen!', 'err'); return; }
+  if (selectedAngles.size === 0) { notify('Mindestens einen Winkel wÃ¤hlen!', 'err'); return; }
+
+  const btn = document.getElementById('shipGenBtn');
+  btn.disabled = true;
+  const progress = document.getElementById('shipProgress');
+  const fill = document.getElementById('shipFill');
+  progress.classList.add('show');
+  fill.style.width = '5%';
+
+  let uploadedRefId = null;
+  if (refDataUrl) {
+    btn.textContent = 'â³ Lade Referenz hoch...';
+    try {
+      uploadedRefId = await uploadReference(apiKey);
+      fill.style.width = '15%';
+      if (uploadedRefId) notify('Referenz hochgeladen â', 'ok');
+    } catch(e) { console.warn('Ref upload failed:', e); }
+  }
+
+  const angles = [...selectedAngles].sort((a, b) => a - b);
+  const [w, h] = document.getElementById('shipSize').value.split('x').map(Number);
+  const model = document.getElementById('shipModel').value;
+  const extraPrompt = document.getElementById('shipPrompt').value.trim();
+  const tags = [...activeTabs_ship].join(', ');
+  const strength = parseFloat(document.getElementById('imgStrength').value);
+
+  let done = 0;
+  btn.textContent = `â³ 0/${angles.length} Winkel...`;
+
+  for (const angleIdx of angles) {
+    const angleDesc = ANGLE_PROMPTS[angleIdx];
+    const shipDesc = getShipDescription(selectedShip.id);
+    const prompt = `${shipDesc}, ${angleDesc}${extraPrompt ? ', ' + extraPrompt : ''}, ${tags}, ${STYLE_BASE}`;
+
+    // Add loading card
+    const loaderId = `loader-${selectedShip.id}-${angleIdx}`;
+    addLoader(loaderId, `${selectedShip.name} ${DIRS[angleIdx].icon}`);
+
+    try {
+      const body = {
+        prompt,
+        negative_prompt: NEG,
+        modelId: model,
+        width: w, height: h,
+        num_images: 1,
+        public: false,
+        promptMagic: false,
+      };
+
+      if (uploadedRefId) {
+        body.init_image_id = uploadedRefId;
+        body.init_strength = strength;
+      }
+
+      const genRes = await fetch(`${API}/generations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify(body)
+      });
+
+      if (!genRes.ok) throw new Error(`HTTP ${genRes.status}`);
+      const genData = await genRes.json();
+      const genId = genData.sdGenerationJob?.generationId;
+      if (!genId) throw new Error('Keine Generation-ID');
+
+      // Poll
+      const images = await pollGeneration(genId, apiKey);
+      if (images.length > 0) {
+        const filename = `ship_${selectedShip.id}_${angleIdx}.png`;
+        replaceLoader(loaderId, images[0].url, filename, `${selectedShip.name} ${DIRS[angleIdx].label}`);
+        galleryCount++;
+        document.getElementById('galCount').textContent = galleryCount;
+      }
+    } catch(e) {
+      removeLoader(loaderId);
+      notify(`Winkel ${DIRS[angleIdx].label} fehlgeschlagen: ${e.message}`, 'err');
+    }
+
+    done++;
+    const pct = 15 + (done / angles.length) * 80;
+    fill.style.width = `${pct}%`;
+    btn.textContent = `â³ ${done}/${angles.length} Winkel...`;
+    await new Promise(r => setTimeout(r, 500)); // kleine Pause zwischen requests
+  }
+
+  fill.style.width = '100%';
+  setTimeout(() => { progress.classList.remove('show'); fill.style.width = '0%'; }, 800);
+  btn.disabled = false;
+  btn.textContent = 'â¡ Winkel generieren';
+  notify(`${done} Winkel generiert! Bereit zum Download â`, 'ok');
+}
+
+function getShipDescription(id) {
+  const desc = {
+    cog: 'hanseatic cog sailing ship, single mast, square sail, rounded hull, wooden medieval vessel',
+    small_cog: 'small hanseatic cog, single mast, compact wooden ship, coastal trader',
+    caravel: 'medieval caravel, three masts, lateen sails, sleek hull, explorer ship',
+    carrack: 'large carrack warship, four masts, high forecastle and sterncastle, imposing vessel',
+    hulk: 'hanseatic hulk, large cargo ship, deep hull, single mast, heavy transport vessel',
+    boat: 'small medieval rowing boat, oars, simple wooden construction, harbor vessel',
+  };
+  return desc[id] || 'medieval sailing ship';
+}
+
+// ââ GENERATE GENERAL âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+async function generateGeneral() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { notify('API Key fehlt!', 'err'); return; }
+
+  const prompt = document.getElementById('genPrompt').value.trim();
+  const base = CAT_PROMPTS[genCat];
+  if (!prompt && !base) { notify('Prompt eingeben!', 'err'); return; }
+
+  const [w, h] = document.getElementById('genSize').value.split('x').map(Number);
+  const count = parseInt(document.getElementById('genCount').value);
+  const model = document.getElementById('genModel').value;
+  const tags = [...activeTabs_gen].join(', ');
+  const fullPrompt = `${prompt || base}, ${tags}, ${STYLE_BASE}`;
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  const progress = document.getElementById('genProgress');
+  const fill = document.getElementById('genFill');
+  progress.classList.add('show');
+  fill.style.width = '20%';
+
+  const loaderIds = [];
+  for (let i = 0; i < count; i++) {
+    const id = `gen-loader-${Date.now()}-${i}`;
+    addLoader(id, `${genCat} #${i+1}`);
+    loaderIds.push(id);
+  }
+
+  try {
+    const res = await fetch(`${API}/generations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ prompt: fullPrompt, negative_prompt: NEG, modelId: model, width: w, height: h, num_images: count, public: false })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const genId = data.sdGenerationJob?.generationId;
+
+    fill.style.width = '50%';
+    const images = await pollGeneration(genId, apiKey);
+    fill.style.width = '95%';
+    loaderIds.forEach(id => removeLoader(id));
+
+    images.forEach((img, i) => {
+      galleryCount++;
+      const filename = `hanse_${genCat}_${Date.now()}_${i+1}.png`;
+      addImageCard(img.url, filename, `${genCat} #${galleryCount}`);
+    });
+
+    document.getElementById('galCount').textContent = galleryCount;
+    fill.style.width = '100%';
+    setTimeout(() => { progress.classList.remove('show'); fill.style.width = '0%'; }, 800);
+    notify(`${images.length} Assets generiert â`, 'ok');
+  } catch(e) {
+    loaderIds.forEach(id => removeLoader(id));
+    notify(`Fehler: ${e.message}`, 'err');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'â¡ Generieren';
+}
+
+// ââ POLLING ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+async function pollGeneration(genId, apiKey, maxAttempts = 30) {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, 2500));
+    const res = await fetch(`${API}/generations/${genId}`, {
+      headers: { 'authorization': `Bearer ${apiKey}` }
+    });
+    const data = await res.json();
+    const gen = data.generations_by_pk;
+    if (gen?.status === 'COMPLETE') return gen.generated_images || [];
+    if (gen?.status === 'FAILED') throw new Error('Generierung fehlgeschlagen');
+  }
+  throw new Error('Timeout');
+}
+
+// ââ GALLERY HELPERS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function getGallery() {
+  const g = document.getElementById('gallery');
+  const empty = g.querySelector('.empty');
+  if (empty) empty.remove();
+  return g;
+}
+
+function addLoader(id, label) {
+  const g = getGallery();
+  const div = document.createElement('div');
+  div.className = 'loader';
+  div.id = id;
+  div.innerHTML = `<div class="spinner"></div><div class="loader-text">${label}</div>`;
+  g.prepend(div);
+}
+
+function removeLoader(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function replaceLoader(id, url, filename, label) {
+  const el = document.getElementById(id);
+  if (!el) { addImageCard(url, filename, label); return; }
+  el.outerHTML = makeCardHTML(url, filename, label);
+}
+
+function addImageCard(url, filename, label) {
+  const g = getGallery();
+  const div = document.createElement('div');
+  div.innerHTML = makeCardHTML(url, filename, label);
+  g.prepend(div.firstChild);
+}
+
+function makeCardHTML(url, filename, label) {
+  return `<div class="img-card">
+    <img src="${url}" alt="${filename}" loading="lazy">
+    <div class="img-meta">
+      <span class="name">${label}</span>
+      <div class="img-actions">
+        <button class="icon-btn" title="Download als ${filename}" onclick="dlImg('${url}','${filename}')">â¬</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ââ DOWNLOAD âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+async function dlImg(url, filename) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    notify(`"${filename}" gespeichert`, 'ok');
+  } catch { window.open(url, '_blank'); }
+}
+
+function downloadAll() {
+  const imgs = document.querySelectorAll('.img-card img');
+  if (!imgs.length) { notify('Keine Bilder', 'err'); return; }
+  imgs.forEach((img, i) => setTimeout(() => dlImg(img.src, img.alt || `hanse_asset_${i+1}.png`), i * 600));
+}
+
+function clearGallery() {
+  document.getElementById('gallery').innerHTML = '<div class="empty"><div class="icon">â</div><p>Generiere deine ersten Assets</p></div>';
+  galleryCount = 0;
+  document.getElementById('galCount').textContent = '0';
+}
+
+// ââ TABS & CATS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['ships','general'][i] === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
+}
+
+function setGenCat(el, cat) {
+  genCat = cat;
+  document.querySelectorAll('#tab-general .ship-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ââ NOTIFY ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function notify(msg, type = 'ok') {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = `notif ${type} show`;
+  clearTimeout(n._t);
+  n._t = setTimeout(() => n.classList.remove('show'), 3500);
+}
+
+init();
+</script>
+</body>
+</html>
