@@ -143,37 +143,37 @@
 <body>
 
 <header>
-  <h1>â HANSE Asset Studio</h1>
+  <h1>⚓ HANSE Asset Studio</h1>
   <div class="api-wrap">
     <input type="password" class="api-input" id="apiKey" placeholder="Leonardo AI API Key...">
   </div>
 </header>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('classes')">ð¯ Asset Klassen</div>
-  <div class="tab" onclick="switchTab('generate')">â¡ Generieren</div>
-  <div class="tab" onclick="switchTab('gallery')">ð¼ Galerie (<span id="galCount">0</span>)</div>
+  <div class="tab active" onclick="switchTab('classes')">🎯 Asset Klassen</div>
+  <div class="tab" onclick="switchTab('generate')">⚡ Generieren</div>
+  <div class="tab" onclick="switchTab('gallery')">🖼 Galerie (<span id="galCount">0</span>)</div>
 </div>
 
-<!-- ââ TAB: ASSET KLASSEN ââ -->
+<!-- ══ TAB: ASSET KLASSEN ══ -->
 <div class="tab-content active" id="tab-classes">
   <div class="info-box">
-    <strong>Flow:</strong> Generiere Assets frei â klick ð auf ein Bild in der Galerie â setze es als Stil-Referenz fÃ¼r eine Klasse â ab dann nutzt diese Klasse das Bild automatisch als img2img-Basis fÃ¼r konsistenten Look.
+    <strong>Flow:</strong> Generiere Assets frei → klick 🔒 auf ein Bild in der Galerie → setze es als Stil-Referenz für eine Klasse → ab dann nutzt diese Klasse das Bild automatisch als img2img-Basis für konsistenten Look.
   </div>
   <div class="panel">
-    <div class="panel-title">Asset Klassen fÃ¼r HANSE</div>
+    <div class="panel-title">Asset Klassen für HANSE</div>
     <div class="class-grid" id="classGrid"></div>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-sm" onclick="addCustomClass()">+ Eigene Klasse hinzufÃ¼gen</button>
+      <button class="btn btn-ghost btn-sm" onclick="addCustomClass()">+ Eigene Klasse hinzufügen</button>
     </div>
   </div>
 </div>
 
-<!-- ââ TAB: GENERIEREN ââ -->
+<!-- ══ TAB: GENERIEREN ══ -->
 <div class="tab-content" id="tab-generate">
 
   <div class="panel">
-    <div class="panel-title">FÃ¼r welche Klasse?</div>
+    <div class="panel-title">Für welche Klasse?</div>
     <div class="chip-group" id="genClassChips"></div>
   </div>
 
@@ -189,21 +189,21 @@
   </div>
 
   <div class="panel" id="refPanel">
-    <div class="panel-title">ð Stil-Referenz (img2img)</div>
+    <div class="panel-title">🔒 Stil-Referenz (img2img)</div>
     <div id="refZoneContent"></div>
     <div id="strengthGroup" style="display:none;margin-top:12px">
-      <label>Referenz-StÃ¤rke</label>
+      <label>Referenz-Stärke</label>
       <div class="slider-wrap">
         <input type="range" id="refStrength" min="0.05" max="0.7" step="0.05" value="0.25"
                oninput="document.getElementById('refStrengthVal').textContent=this.value">
         <span class="slider-val" id="refStrengthVal">0.25</span>
       </div>
-      <div class="slider-hint"><span>â Stil stark Ã¼bernehmen</span><span>mehr Variation â</span></div>
+      <div class="slider-hint"><span>← Stil stark übernehmen</span><span>mehr Variation →</span></div>
     </div>
     <div style="margin-top:10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="useRef" style="width:auto">
-        <span style="font-size:0.82rem;color:var(--text)">Referenz fÃ¼r diese Generierung verwenden</span>
+        <span style="font-size:0.82rem;color:var(--text)">Referenz für diese Generierung verwenden</span>
       </label>
     </div>
   </div>
@@ -226,35 +226,35 @@
         </select>
       </div>
       <div>
-        <label>GrÃ¶Ãe</label>
+        <label>Größe</label>
         <select id="genSize">
-          <option value="512x512">512 Ã 512</option>
-          <option value="768x768" selected>768 Ã 768</option>
-          <option value="1024x1024">1024 Ã 1024</option>
-          <option value="768x512">768 Ã 512 (Quer)</option>
-          <option value="512x768">512 Ã 768 (Hoch)</option>
+          <option value="512x512">512 × 512</option>
+          <option value="768x768" selected>768 × 768</option>
+          <option value="1024x1024">1024 × 1024</option>
+          <option value="768x512">768 × 512 (Quer)</option>
+          <option value="512x768">512 × 768 (Hoch)</option>
         </select>
       </div>
     </div>
   </div>
 
-  <button class="btn btn-primary" id="genBtn" onclick="generate()" style="width:100%;padding:12px;font-size:0.95rem">â¡ Generieren</button>
+  <button class="btn btn-primary" id="genBtn" onclick="generate()" style="width:100%;padding:12px;font-size:0.95rem">⚡ Generieren</button>
   <div class="progress" id="genProgress"><div class="progress-fill" id="genFill"></div></div>
   <div id="genStatus" style="font-size:0.78rem;color:var(--muted);margin-top:6px;text-align:center"></div>
 
 </div>
 
-<!-- ââ TAB: GALERIE ââ -->
+<!-- ══ TAB: GALERIE ══ -->
 <div class="tab-content" id="tab-gallery">
   <div class="gal-header">
     <div class="gal-count">Generiert: <span id="galCountBig">0</span></div>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-sm" onclick="downloadAll()">â¬ Alle</button>
-      <button class="btn btn-ghost btn-sm" onclick="clearGallery()">ð Leeren</button>
+      <button class="btn btn-ghost btn-sm" onclick="downloadAll()">⬇ Alle</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearGallery()">🗑 Leeren</button>
     </div>
   </div>
   <div id="gallery">
-    <div class="empty"><div class="icon">â</div><p>Noch keine Assets generiert</p></div>
+    <div class="empty"><div class="icon">⚓</div><p>Noch keine Assets generiert</p></div>
   </div>
 </div>
 
@@ -267,507 +267,356 @@
 <div class="notif" id="notif"></div>
 
 <script>
-// âââ CONSTANTS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const API = 'https://cloud.leonardo.ai/api/rest/v1';
 const NEG = 'blurry, low quality, distorted, deformed, watermark, text, signature, bad anatomy, duplicate, cropped, jpeg artifacts';
 const REFS_KEY = 'hanse_class_refs_v2';
 
 const MODELS = [
-  { id: 'b24e16ff-06e3-43eb-8d33-4416c2d75876', name: 'Phoenix',       desc: 'Top QualitÃ¤t & Stil' },
-  { id: '6bef9f1b-29cb-40c7-b9df-32b51c1f67d3', name: 'Diffusion XL', desc: 'Vielseitig' },
-  { id: 'aa77f04e-3eec-4034-9c07-d0f619684628', name: 'Lightning XL',  desc: 'Schnell' },
-  { id: '1e60896f-3c26-4296-8ecc-53e2afecc132', name: 'Kino XL',       desc: 'Cinematisch' },
-  { id: 'e316348f-7773-490e-adcd-46757c738eb9', name: 'Abs. Reality',  desc: 'Realistisch' },
-  { id: 'd69c8273-6b17-4a30-a13e-d6637ae1c644', name: 'DreamShaper 7', desc: 'Fantasy/Illust.' },
-];
+  { id: 'b24e16ff-06e3-43eb-8d33-4416c2d75876', name: 'Phoenix',       desc: 'Top Qualität	��[	�K��Y�	͘�Y�Y�X�L�X؋M��X�Y�L̘�LX�Y������[YN�	�Y��\�[ۈ	�\�Έ	՚Y[�Z]Y��K��Y�	�XM�ٌ
+KL�YX�M�NX�
+�Y��NM�
 
-const DEFAULT_CLASSES = [
-  { id: 'ships',   name: 'Schiffe',    icon: 'â', prompt: 'hanseatic medieval wooden sailing cog ship, side view, detailed, game sprite, transparent background, isolated' },
-  { id: 'harbor',  name: 'Hafen',      icon: 'ð', prompt: 'medieval hanseatic harbor, wooden warehouse, merchant dock building, isometric game asset, detailed' },
-  { id: 'items',   name: 'Items',      icon: 'âï¸', prompt: 'medieval trading item, cargo goods, weapon or tool, game asset icon, isolated on transparent background' },
-  { id: 'cards',   name: 'Karten',     icon: 'ð', prompt: 'medieval trading card artwork, hanseatic theme, ornate parchment border, detailed illustration, card art' },
-  { id: 'ui',      name: 'UI / MenÃ¼s', icon: 'ð', prompt: 'medieval fantasy game UI element, parchment frame, wooden panel, decorative border, HUD element' },
-  { id: 'chars',   name: 'Charaktere', icon: 'ð§', prompt: 'medieval hanseatic merchant character portrait, detailed face, game RPG character art, waist up' },
-  { id: 'terrain', name: 'Terrain',    icon: 'ðº', prompt: 'medieval map terrain tile, coastal sea and harbor, top-down 2D isometric game tile' },
-  { id: 'effects', name: 'Effekte',    icon: 'â¨', prompt: 'medieval game visual effect, wind or lightning or water particle effect, transparent background, clean edges' },
-];
+��	��[YN�	�Y��[��	�\�Έ	����[	�K��Y�	�YM�M��L�̍�M�M�NX��ML�L�Y�X��L̉��[YN�	��[��	�\�Έ	��[�[X]\��	�K��Y�	�L�M���M����MLKXY�M
+��M����X�I��[YN�	�X�ˈ�X[]I�\�Έ	ԙX[\�\��	�K��Y�	�
+�X����M��M�ML�XLL�KY
+����YLX͍
+	��[YN�	��X[T�\\�
+��\�Έ	ј[�\�K�[\���K�N��ۜ�Q�US��T��T�H�Y�	��\���[YN�	���Y��I�X�ێ�	�������\�	�[��X]X�YYY]�[���[��Z[[������\�YH�Y]�]Z[Y�[YH��]K�[��\�[��X��ܛ�[�\��]Y	�K��Y�	�\��܉��[YN�	�Y�[��X�ێ�	�'������\�	�YYY]�[[��X]X�\��܋���[��\�Z�\�KY\��[�����Z[[��\��Y]�X��[YH\��]]Z[Y	�K��Y�	�][\���[YN�	�][\��X�ێ�	���;�#����\�	�YYY]�[�Y[��][K�\��������X\ۈ܈���[YH\��]X�ۋ\��]Yۈ�[��\�[��X��ܛ�[�	�K��Y�	��\����[YN�	��\�[��X�ێ�	�'������\�	�YYY]�[�Y[���\�\��ܚ�[��X]X�[YKܛ�]H\��Y[��ܙ\�]Z[Y[\��][ۋ�\�\�	�K��Y�	�ZI��[YN�	�RH�Y[����X�ێ�	�'��	���\�	�YYY]�[�[�\�H�[YHRH[[Y[�\��Y[���[YK���[�[�[X�ܘ]]�H�ܙ\�Q[[Y[�	�K��Y�	��\����[YN�	��\�Z�\�I�X�ێ�	�'��I���\�	�YYY]�[[��X]X�Y\��[��\�X�\�ܝ�Z]]Z[Y�X�K�[YH���\�X�\�\��Z\�\	�K��Y�	�\��Z[���[YN�	�\��Z[��X�ێ�	�'�����\�	�YYY]�[X\\��Z[�[K��\�[�XH[�\��܋�Y�ۈ�\��Y]�X��[YH[I�K��Y�	�Y��X����[YN�	�Y��Z�I�X�ێ�	��*	���\�	�YYY]�[�[YH�\�X[Y��X��[�܈��]\�܈�\�H\�X�HY��X��[��\�[��X��ܛ�[��X[�Y�\��K�N��ۜ��SW�Q��H	�YYY]�[[\��][ۉ�	�[�\Z[�Y	�	�]Z[Y	�	��[^�Y	��	�Z[�\�I�	��]\���܉�	�^[\�	�	��ۘ�\\�	��	��[��\�[��X��ܛ�[�	�	��[YH\��]	�	�Y��\��][ۉ�	ٛ]�Y[����N���8� 8� 8� �UH8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �]�\�ԙY��H�N][�\��\�H�N]�[X�Y�\��YH	��\��]�[X�Y[�[YHS�S��K�Y]X�]�T�[UY��H�]��]
+��YYY]�[[\��][ۉ�	��[YH\��]	�JN]�[\�P��[�H���8� 8� 8� S�U8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ[�]
 
-const STYLE_TAGS = [
-  'medieval illustration', 'hand-painted', 'detailed', 'stylized',
-  'painterly', 'watercolor', 'pixel art', 'concept art',
-  'transparent background', 'game asset', 'high resolution', 'flat shading',
-];
+H�Y]J
+N�Z[�\��ܚY
 
-// âââ STATE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-let classRefs = {};
-let allClasses = [];
-let selectedClassId = 'ships';
-let selectedModelId = MODELS[0].id;
-let activeStyleTags = new Set(['medieval illustration', 'game asset']);
-let galleryCount = 0;
+N�Z[�[��\���\�
+N�Z[�[UY��\�
+N�Z[[�[ܚY
 
-// âââ INIT ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function init() {
-  loadData();
-  buildClassGrid();
-  buildGenClassChips();
-  buildStyleTagChips();
-  buildModelGrid();
-  refreshRefPanel();
-}
+N�Y��\��Y�[�[
 
-function loadData() {
-  classRefs = {};
-  allClasses = [...DEFAULT_CLASSES];
-  try {
-    const stored = localStorage.getItem(REFS_KEY);
-    if (stored) {
-      const data = JSON.parse(stored);
-      classRefs = data.refs || {};
-      // restore custom classes
-      if (data.customClasses) {
-        data.customClasses.forEach(c => {
-          if (!allClasses.find(x => x.id === c.id)) allClasses.push(c);
-        });
-      }
-    }
-  } catch(e) {}
-}
+NB���[��[ۈ�Y]J
+H�\�ԙY��H�N[�\��\�Hˋ��Q�US��T��T�N�H�ۜ��ܙYH��[�ܘY�K��]][J�Q����VJNY�
+�ܙY
+H�ۜ�]HH��Ӌ�\��J�ܙY
+N�\�ԙY��H]K��Y���N���\�ܙH�\��H�\��\Y�
+]K��\��P�\��\�H]K��\��P�\��\˙�ܑXX�
+�O�Y�
+X[�\��\˙�[�
+O��YOOH˚Y
+JH[�\��\˜\�
+�NJNB�B�H�]�
+JH�B�B���[��[ۈ�]�Q]J
+H�ۜ��\��P�\��\�H[�\��\˙�[\��O�QT�UUS��T��T˙�[�
+O��YOOH˚Y
+JN��[�ܘY�K��]][J�Q����VK��Ӌ���[��Y�J��Y�Έ�\�ԙY���\��P�\��\�JJNB����8� 8� 8� �T��ԒQ8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[�\��ܚY
 
-function saveData() {
-  const customClasses = allClasses.filter(c => !DEFAULT_CLASSES.find(d => d.id === c.id));
-  localStorage.setItem(REFS_KEY, JSON.stringify({ refs: classRefs, customClasses }));
-}
+H�ۜ�ܚYH��[Y[���][[Y[��RY
+	��\��ܚY	�NܚY�[��\�SH	��[�\��\˙�ܑXX�
+��O��ۜ��Y�H�\�ԙY����˚YN�ۜ��\�H��[Y[��ܙX]Q[[Y[�
+	�]��N�\���\�Ә[YHH	��\��X�\�	�
+�
+�Y��	�\�\�Y���	��N�\��[��\�SH�]��\��H��\��][X����	ܙY���[Y�ܘ�H�ܙY��\�H�[H���˛�[Y_H��Y[��H�^�H�ۙ\��܏H�\˜\�[�[[Y[��[��\�SI��˚X�۟H����[��\��H��\��[���X�Y�H��'�$���[�����˚X�۟B��]���]��\��H��\��Z[��ȏ��]��\��H��\��[�[YH����˚X�۟H	��˛�[Y_O�]���]��\��H��\��\�]\ȏ�ܙY��	�'���Y�\�[��Z�]���	�����Z[�H�Y�\�[���O�]����]���\��Y]�[�\�[�\�	��X���
 
-// âââ CLASS GRID ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function buildClassGrid() {
-  const grid = document.getElementById('classGrid');
-  grid.innerHTML = '';
-  allClasses.forEach(cls => {
-    const ref = classRefs[cls.id];
-    const card = document.createElement('div');
-    card.className = 'class-card' + (ref ? ' has-ref' : '');
-    card.innerHTML = `
-      <div class="class-thumb">
-        ${ref
-          ? `<img src="${ref.url}" alt="${cls.name}" loading="lazy" onerror="this.parentElement.innerHTML='${cls.icon}'">
-             <span class="class-lock-badge">ð</span>`
-          : cls.icon}
-      </div>
-      <div class="class-info">
-        <div class="class-name">${cls.icon} ${cls.name}</div>
-        <div class="class-status">${ref ? 'ð¢ Referenz aktiv' : 'â Keine Referenz'}</div>
-      </div>`;
-    card.addEventListener('click', () => goGenerate(cls.id));
-    grid.appendChild(card);
-  });
-}
+HO����[�\�]J�˚Y
+JNܚY�\[��[
+�\�
+NJNB���[��[ۈ���[�\�]J�\��Y
+H�[X�Y�\��YH�\��Y�ۜ���H[�\��\˙�[�
+�O�˚YOOH�\��Y
+NY�
+��H��[Y[���][[Y[��RY
+	��[���\	�K��[YHH�˜��\\]Q�[��\���\�
+N�Y��\��Y�[�[
 
-function goGenerate(classId) {
-  selectedClassId = classId;
-  const cls = allClasses.find(c => c.id === classId);
-  if (cls) document.getElementById('genPrompt').value = cls.prompt;
-  updateGenClassChips();
-  refreshRefPanel();
-  switchTab('generate');
-}
+N��]�X�	��[�\�]I�NB���[��[ۈY�\��P�\��
+H�ۜ��[YHH��\
+	Ә[YH\��]Y[��\��N��NY�
+[�[YH[�[YK��[J
+JH�]\���ۜ�X�ۈH��\
+	�[[ښHX�ۈ
+�[ۘ[
+N��	�'���H	�'����ۜ��\�T��\H��\
+	И\�\�T��\��	�YYY]�[�[YH\��]]Z[Y\��]Y	�H	�YYY]�[�[YH\��]	��ۜ�YH�[YK����\��\�J
+K��\X�J�����	���K��\X�J�טK^�NW�K��	��H
+�	���
+�]K����
+N[�\��\˜\�
+�Y�[YN��[YK��[J
+KX�ۋ��\��\�T��\JN�]�Q]J
+N�Z[�\��ܚY
 
-function addCustomClass() {
-  const name = prompt('Name der neuen Klasse:');
-  if (!name || !name.trim()) return;
-  const icon = prompt('Emoji Icon (optional):', 'ð¦') || 'ð¦'';
-  const basePrompt = prompt('Basis-Prompt:', 'medieval game asset, detailed, isolated') || 'medieval game asset';
-  const id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
-  allClasses.push({ id, name: name.trim(), icon, prompt: basePrompt });
-  saveData();
-  buildClassGrid();
-  buildGenClassChips();
-  notify(`Klasse "${name.trim()}" hinzugefÃ¼gt`, 'ok');
-}
+N�Z[�[��\���\�
+N��Y�J�\��H�ۘ[YK��[J
+_H�[��Y�Y���	����NB����8� 8� 8� �S��T���T�8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[�[��\���\�
+H�ۜ��۝Z[�\�H��[Y[���][[Y[��RY
+	��[��\���\��N�۝Z[�\��[��\�SH	��[�\��\˙�ܑXX�
+��O��ۜ��\H��[Y[��ܙX]Q[[Y[�
+	�]��N�ۜ�\ԙY�HHX�\�ԙY����˚YN�\��\�Ә[YHH	��\	�
+�
+�˚YOOH�[X�Y�\��Y�	�X�]�I��	��H
+�
+\ԙY��	����Y	��	��N�\�^�۝[�H
+\ԙY��	�'�$�	��	��H
+��˚X�ۈ
+�	�	�
+��˛�[YN�\�]\�]�YH�˚Y�\�Y]�[�\�[�\�	��X���
 
-// âââ GEN CLASS CHIPS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function buildGenClassChips() {
-  const container = document.getElementById('genClassChips');
-  container.innerHTML = '';
-  allClasses.forEach(cls => {
-    const chip = document.createElement('div');
-    const hasRef = !!classRefs[cls.id];
-    chip.className = 'chip' + (cls.id === selectedClassId ? ' active' : '') + (hasRef ? ' locked' : '');
-    chip.textContent = (hasRef ? 'ð ' : '') + cls.icon + ' ' + cls.name;
-    chip.dataset.id = cls.id;
-    chip.addEventListener('click', () => {
-      selectedClassId = cls.id;
-      const c = allClasses.find(x => x.id === cls.id);
-      if (c) document.getElementById('genPrompt').value = c.prompt;
-      updateGenClassChips();
-      refreshRefPanel();
-    });
-    container.appendChild(chip);
-  });
-}
+HO��[X�Y�\��YH�˚Y�ۜ��H[�\��\˙�[�
+O��YOOH�˚Y
+NY�
+�H��[Y[���][[Y[��RY
+	��[���\	�K��[YHH˜��\\]Q�[��\���\�
+N�Y��\��Y�[�[
 
-function updateGenClassChips() {
-  document.querySelectorAll('#genClassChips .chip').forEach(chip => {
-    const cls = allClasses.find(c => c.id === chip.dataset.id);
-    if (!cls) return;
-    const hasRef = !!classRefs[cls.id];
-    chip.className = 'chip' + (chip.dataset.id === selectedClassId ? ' active' : '') + (hasRef ? ' locked' : '');
-    chip.textContent = (hasRef ? 'ð ' : '') + cls.icon + ' ' + cls.name;
-  });
-}
+NJN�۝Z[�\��\[��[
+�\
+NJNB���[��[ۈ\]Q�[��\���\�
+H��[Y[��]Y\�T�[X�ܐ[
+	���[��\���\���\	�K��ܑXX�
+�\O��ۜ���H[�\��\˙�[�
+�O�˚YOOH�\�]\�]�Y
+NY�
+X��H�]\���ۜ�\ԙY�HHX�\�ԙY����˚YN�\��\�Ә[YHH	��\	�
+�
+�\�]\�]�YOOH�[X�Y�\��Y�	�X�]�I��	��H
+�
+\ԙY��	����Y	��	��N�\�^�۝[�H
+\ԙY��	�'�$�	��	��H
+��˚X�ۈ
+�	�	�
+��˛�[YNJNB����8� 8� 8� �SHQ��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[�[UY��\�
+H�ۜ��۝Z[�\�H��[Y[���][[Y[��RY
+	��[UY��\��N�۝Z[�\��[��\�SH	���SW�Q�˙�ܑXX�
+Y�O��ۜ��\H��[Y[��ܙX]Q[[Y[�
+	�]��N�\��\�Ә[YHH	��\	�
+�
+X�]�T�[UY�˚\�Y�H�	�X�]�I��	��N�\�^�۝[�HY��\�Y]�[�\�[�\�	��X���
 
-// âââ STYLE TAGS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function buildStyleTagChips() {
-  const container = document.getElementById('styleTagChips');
-  container.innerHTML = '';
-  STYLE_TAGS.forEach(tag => {
-    const chip = document.createElement('div');
-    chip.className = 'chip' + (activeStyleTags.has(tag) ? ' active' : '');
-    chip.textContent = tag;
-    chip.addEventListener('click', () => {
-      chip.classList.toggle('active');
-      if (chip.classList.contains('active')) activeStyleTags.add(tag);
-      else activeStyleTags.delete(tag);
-    });
-    container.appendChild(chip);
-  });
-}
+HO��\��\��\�����J	�X�]�I�NY�
+�\��\��\���۝Z[��	�X�]�I�JHX�]�T�[UY�˘Y
+Y�N[�HX�]�T�[UY�˙[]JY�NJN�۝Z[�\��\[��[
+�\
+NJNB����8� 8� 8� S�SԒQ8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Z[[�[ܚY
 
-// âââ MODEL GRID ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function buildModelGrid() {
-  const grid = document.getElementById('genModelGrid');
-  grid.innerHTML = '';
-  MODELS.forEach((model, i) => {
-    const card = document.createElement('div');
-    card.className = 'model-card' + (i === 0 ? ' active' : '');
-    card.innerHTML = `<div class="model-name">${model.name}</div><div class="model-desc">${model.desc}</div>`;
-    card.addEventListener('click', () => {
-      grid.querySelectorAll('.model-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-      selectedModelId = model.id;
-    });
-    grid.appendChild(card);
-  });
-}
+H�ۜ�ܚYH��[Y[���][[Y[��RY
+	��[�[�[ܚY	�NܚY�[��\�SH	��S�S˙�ܑXX�
 
-// âââ REF PANEL âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function refreshRefPanel() {
-  const ref = classRefs[selectedClassId];
-  const cls = allClasses.find(c => c.id === selectedClassId);
-  const content = document.getElementById('refZoneContent');
-  const strengthGroup = document.getElementById('strengthGroup');
-  const useRefCheck = document.getElementById('useRef');
+[�[JHO��ۜ��\�H��[Y[��ܙX]Q[[Y[�
+	�]��N�\���\�Ә[YHH	�[�[X�\�	�
+�
+HOOH�	�X�]�I��	��N�\��[��\�SH]��\��H�[�[[�[YH���[�[��[Y_O�]��]��\��H�[�[Y\�ȏ��[�[�\��O�]���\��Y]�[�\�[�\�	��X���
 
-  if (ref) {
-    content.innerHTML = `
-      <div class="ref-zone">
-        <img class="ref-thumb" src="${ref.url}" alt="Referenz" onerror="this.style.display='none'">
-        <div class="ref-zone-info">
-          <div class="ref-zone-title">ð ${cls ? cls.name : ''} â Referenz aktiv</div>
-          <div class="ref-zone-sub">Gesetzt: ${new Date(ref.lockedAt).toLocaleString('de-DE')}</div>
-          ${ref.label ? `<div class="ref-zone-sub" style="margin-top:2px">${ref.label}</div>` : ''}
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="clearRef('${selectedClassId}')">ð Entfernen</button>
-      </div>`;
-    strengthGroup.style.display = 'block';
-    useRefCheck.checked = true;
-  } else {
-    content.innerHTML = `<div style="font-size:0.82rem;color:var(--muted)">Noch keine Referenz fÃ¼r <strong style="color:var(--text)">${cls ? cls.name : 'diese Klasse'}</strong> gesetzt.<br><br>Generiere Bilder â klick ð in der Galerie â setze das beste als Referenz. Dann nutzen alle zukÃ¼nftigen Generierungen dieser Klasse dieses Bild als img2img-Stilvorlage.</div>`;
-    strengthGroup.style.display = 'none';
-    useRefCheck.checked = false;
-  }
-}
+HO�ܚY�]Y\�T�[X�ܐ[
+	˛[�[X�\�	�K��ܑXX�
+�O�˘�\��\���[[ݙJ	�X�]�I�JN�\���\��\��Y
+	�X�]�I�N�[X�Y[�[YH[�[�YJNܚY�\[��[
+�\�
+NJNB����8� 8� 8� �Q�S�S8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�Y��\��Y�[�[
 
-// âââ CLASS REFS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function setRef(classId, url, label) {
-  classRefs[classId] = { url, label: label || '', lockedAt: new Date().toISOString() };
-  saveData();
-  buildClassGrid();
-  updateGenClassChips();
-  if (selectedClassId === classId) refreshRefPanel();
-  const cls = allClasses.find(c => c.id === classId);
-  notify(`ð Als ${cls ? cls.name : classId}-Referenz gesetzt â`, 'ok');
-}
+H�ۜ��Y�H�\�ԙY����[X�Y�\��YN�ۜ���H[�\��\˙�[�
+�O�˚YOOH�[X�Y�\��Y
+N�ۜ��۝[�H��[Y[���][[Y[��RY
+	ܙY��ۙP�۝[�	�N�ۜ���[��ܛ�\H��[Y[���][[Y[��RY
+	���[��ܛ�\	�N�ۜ�\�T�Y��X��H��[Y[���][[Y[��RY
+	�\�T�Y��N�Y�
+�Y�H�۝[��[��\�SH�]��\��H��Y�^�ۙH���[Y��\��H��Y�][X��ܘ�H�ܙY��\�H�[H��Y�\�[���ۙ\��܏H�\˜�[K�\�^OIۛۙIȏ��]��\��H��Y�^�ۙKZ[��ȏ��]��\��H��Y�^�ۙK]]H��'�$�	�����˛�[YH�	��H8�$��Y�\�[��Z�]��]���]��\��H��Y�^�ۙK\�X����\�]��	ۙ]�]J�Y�����Y]
+K����[T��[��	�KQI�_O�]���	ܙY��X�[�]��\��H��Y�^�ۙK\�X���[OH�X\��[�]�����ܙY��X�[O�]���	��B��]����]ۈ�\��H�����Y�����\�H�ۘ�X��H��X\��Y�	���[X�Y�\��YI�H��'��H[��\��[�؝]ۏ���]����[��ܛ�\��[K�\�^HH	؛����\�T�Y��X�˘�X��YH�YNH[�H�۝[��[��\�SH]��[OH��۝\�^�N����[N���܎��\�K[]]Y
+H������Z[�H�Y�\�[�������ۙ��[OH���܎��\�K]^
+H�������˛�[YH�	�Y\�H�\��I�O���ۙψ�\�]���������[�\�Y\�H�[\�8����X��<'�$�[�\��[\�YH8����]�H\��\�H[��Y�\�[���[���]�[�[H�Z����Y�[��[�\�Y\�[��[�Y\�\��\��HY\�\��[[�[Y̚[Y�T�[�ܛY�K��]����[��ܛ�\��[K�\�^HH	ۛۙI�\�T�Y��X�˘�X��YH�[�NB�B����8� 8� 8� �T���Q��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�]�Y��\��Y\�X�[
+H�\�ԙY����\��YHH�\�X�[�X�[	�����Y]��]�]J
+K��T����[��
+HN�]�Q]J
+N�Z[�\��ܚY
 
-function clearRef(classId) {
-  delete classRefs[classId];
-  saveData();
-  buildClassGrid();
-  updateGenClassChips();
-  refreshRefPanel();
-  notify('Referenz entfernt', 'warn');
-}
+N\]Q�[��\���\�
+NY�
+�[X�Y�\��YOOH�\��Y
+H�Y��\��Y�[�[
 
-// âââ IMAGE UPLOAD (for img2img) ââââââââââââââââââââââââââââââââââââââââââââââ
-async function uploadImageFromUrl(imageUrl, apiKey) {
-  const imgRes = await fetch(imageUrl);
-  if (!imgRes.ok) throw new Error('Referenzbild konnte nicht geladen werden');
-  const blob = await imgRes.blob();
-  const ext = blob.type.includes('png') ? 'png' : 'jpg';
+N�ۜ���H[�\��\˙�[�
+�O�˚YOOH�\��Y
+N��Y�J<'�$�[�	�����˛�[YH��\��YKT�Y�\�[���\�]�8�$�	����NB���[��[ۈ�X\��Y��\��Y
+H[]H�\�ԙY����\��YN�]�Q]J
+N�Z[�\��ܚY
 
-  const initRes = await fetch(`${API}/init-image`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({ extension: ext })
-  });
-  if (!initRes.ok) throw new Error(`Init-Image HTTP ${initRes.status}`);
-  const data = await initRes.json();
-  const { id, fields, url } = data.uploadInitImage;
+N\]Q�[��\���\�
+N�Y��\��Y�[�[
 
-  const form = new FormData();
-  Object.entries(JSON.parse(fields)).forEach(([k, v]) => form.append(k, v));
-  form.append('file', blob);
-  const uploadRes = await fetch(url, { method: 'POST', body: form });
-  if (!uploadRes.ok && uploadRes.status !== 204) throw new Error('S3 Upload fehlgeschlagen');
+N��Y�J	ԙY�\�[��[��\��	�	��\���NB����8� 8� 8� SPQ�HT�Q
+�܈[Y̚[Y�H8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ\�Y[XY�Q���U\�
+[XY�U\�\R�^JH�ۜ�[Yԙ\�H]�Z]�]�
+[XY�U\�
+NY�
+Z[Yԙ\˛��H����]�\��܊	ԙY�\�[���[�ۛ�H�X��[Y[��\�[��N�ۜ��؈H]�Z][Yԙ\˘�؊
+N�ۜ�^H�؋�\K�[��Y\�	����H�	�����	ڜ����ۜ�[�]�\�H]�Z]�]�
+	�T_K�[�]Z[XY�XY]��	���	��XY\�Έ�	��۝[�U\IΈ	�\X�][ۋڜ�ۉ�	�]]ܚ^�][ۉΈ�X\�\�	�\R�^_XK���N���Ӌ���[��Y�J�^[��[ێ�^JB�JNY�
+Z[�]�\˛��H����]�\��܊[�]R[XY�H	�[�]�\˜�]\�X
+N�ۜ�]HH]�Z][�]�\˚��ۊ
+N�ۜ��Y�Y[�\�HH]K�\�Y[�][XY�N��ۜ��ܛHH�]��ܛQ]J
+Nؚ�X��[��Y\���Ӌ�\��J�Y[�JK��ܑXX�
 
-  return id;
-}
+���JHO��ܛK�\[�
+��JN�ܛK�\[�
+	ٚ[I��؊N�ۜ�\�Y�\�H]�Z]�]�
+\��Y]��	���	���N��ܛHJNY�
+]\�Y�\˛��	��\�Y�\˜�]\�OOH�
+H����]�\��܊	���\�Y�Z�\��Y�[��N��]\��YB����8� 8� 8� �S�T�UH8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ�[�\�]J
+H�ۜ�\R�^HH��[Y[���][[Y[��RY
+	�\R�^I�K��[YK��[J
+NY�
+X\R�^JH���Y�J	�TH�^H�ZI�	�\���N��]\���B��ۜ���\^H��[Y[���][[Y[��RY
+	��[���\	�K��[YK��[J
+NY�
+\��\^
+H���Y�J	���\Z[��X�[�I�	�\���N��]\���B���ۜ�\�T�Y�H��[Y[���][[Y[��RY
+	�\�T�Y��K��X��Y�ۜ��Y�H�\�ԙY����[X�Y�\��YN�ۜ���[�H\��R[�
+��[Y[���][[Y[��RY
+	��[���[�	�K��[YJN�ۜ���HH��[Y[���][[Y[��RY
+	��[��^�I�K��[YK��]
+	�	�K�X\
+�[X�\�N�ۜ�Y��Hˋ��X�]�T�[UY��K���[�	�	�N�ۜ��[��\HY���	���\^K	�Y��X���\^��ۜ���H��[Y[���][[Y[��RY
+	��[����N�ۜ��[H��[Y[���][[Y[��RY
+	��[��[	�N�ۜ���ܙ\��H��[Y[���][[Y[��RY
+	��[���ܙ\���N�ۜ��]\�H��[Y[���][[Y[��RY
+	��[��]\��N����\�X�YH�YN���^�۝[�H	�����\�K������ܙ\�˘�\��\��Y
+	�����N�[��[K��YH	�	I���ۜ���H[�\��\˙�[�
+�O�˚YOOH�[X�Y�\��Y
+N�ۜ��Y\�Y�H�N��]�X�	��[\�I�N�܈
+]HH�H��[��J��H�ۜ�YH�[�I�]K����
+_KI�_XY�Y\�Y	�����˛�[YH�	�\��]	�H��H
+�_X
+N�Y\�Y˜\�
+Y
+NB��][�][XY�RYH�[Y�
+\�T�Y�	���Y�H�H���^�۝[�H	��!��#��Y�\�[���\��[Y[������]\˝^�۝[�H	��[T�Y�\�[���\��H[ۘ\�����[Y[������[��[K��YH	�N	I�[�][XY�RYH]�Z]\�Y[XY�Q���U\�
+�Y��\�\R�^JN�[��[K��YH	̎	I��]\˝^�۝[�H	ԙY�\�[�����[Y[�8�$��H�]�
+JH�]\˝^�۝[�H	����Y�J�Y�\�[��U\�Y�Z�\��Y�[�
+	�K�Y\��Y�_JH8�$��[�\�Y\�H��H�Y�\�[��	��\���NB�B�����^�۝[�H	�����[�\�Y\�K�����]\˝^�۝[�H	��[�\�][ۈ0�Y������[��[K��YH	��II���H�ۜ���HH��\��[��\��Y�]]�W���\��Q��[�[Y��[X�Y[�[Y��Y���ZY����[W�[XY�\Έ��[��X�XΈ�[�K�NY�
+[�][XY�RY
+H��K�[�]�[XY�W�YH[�][XY�RY��K�[�]���[��H\��Q��]
+��[Y[���][[Y[��RY
+	ܙY���[��	�K��[YJNB���ۜ��\�H]�Z]�]�
+	�T_K��[�\�][ۜ�Y]��	���	��XY\�Έ�	��۝[�U\IΈ	�\X�][ۋڜ�ۉ�	�]]ܚ^�][ۉΈ�X\�\�	�\R�^_XK���N���Ӌ���[��Y�J��JB�JNY�
+\�\˛��H�ۜ�\��^H]�Z]�\˝^
 
-// âââ GENERATE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-async function generate() {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  if (!apiKey) { notify('API Key fehlt!', 'err'); return; }
-  const promptText = document.getElementById('genPrompt').value.trim();
-  if (!promptText) { notify('Prompt eingeben!', 'err'); return; }
+N����]�\��܊	ܙ\˜�]\�N�	�\��^��X�JL�
+_X
+NB��ۜ�]HH]�Z]�\˚��ۊ
+N�ۜ��[�YH]K���[�\�][ے�؏˙�[�\�][ےYY�
+Y�[�Y
+H����]�\��܊	��Z[�H�[�\�][ۋRQ\�[[��N��[��[K��YH	�L	I��]\˝^�۝[�H	��\�H]Y�\��X��\ˋ����ۜ�[XY�\�H]�Z]��[�\�][ۊ�[�Y\R�^JN�[��[K��YH	�MII���Y\�Y˙�ܑXX�
+YO��[[ݙS�Y\�Y
+JN[XY�\˙�ܑXX�
 
-  const useRef = document.getElementById('useRef').checked;
-  const ref = classRefs[selectedClassId];
-  const count = parseInt(document.getElementById('genCount').value);
-  const [w, h] = document.getElementById('genSize').value.split('x').map(Number);
-  const tags = [...activeStyleTags].join(', ');
-  const fullPrompt = tags ? `${promptText}, ${tags}` : promptText;
+[Y�JHO��[\�P��[�
+���ۜ�X�[H	�����˛�[YH�	�\��]	�H���[\�P��[�X�ۜ��[[�[YHH[��W���[X�Y�\��YW��]K����
+_W��H
+�_K���Y[XY�P�\�
+[Y˝\��[[�[YKX�[�[X�Y�\��Y
+NJN\]Q�[��[��
+N�[��[K��YH	�L	I��]\˝^�۝[�H	���][Y[�]
 
-  const btn = document.getElementById('genBtn');
-  const fill = document.getElementById('genFill');
-  const progress = document.getElementById('genProgress');
-  const status = document.getElementById('genStatus');
 
-  btn.disabled = true;
-  btn.textContent = 'â³ Starte...';
-  progress.classList.add('show');
-  fill.style.width = '8%';
+HO����ܙ\�˘�\��\���[[ݙJ	�����N��[��[K��YH	�	I��K
+N��Y�J	�[XY�\˛[��H	�����˛�[YH�	�\��]��H�[�\�Y\�8�$�	����N�H�]�
+JH�Y\�Y˙�ܑXX�
+YO��[[ݙS�Y\�Y
+JN�]\˝^�۝[�H	����Y�J�Z\��	�K�Y\��Y�_X	�\���N��ܙ\�˘�\��\���[[ݙJ	�����N�[��[K��YH	�	I�B�����\�X�YH�[�N���^�۝[�H	���H�[�\�Y\�[��B����8� 8� 8� �S��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ��[�\�][ۊ�[�Y\R�^KX^][\�H
+
+H�܈
+]HH�HX^][\��J��H]�Z]�]���Z\�J�O��][Y[�]
+��L
+JN�ۜ��\�H]�Z]�]�
+	�T_K��[�\�][ۜ����[�YXXY\�Έ�	�]]ܚ^�][ۉΈ�X\�\�	�\R�^_XB�JN�ۜ�]HH]�Z]�\˚��ۊ
+N�ۜ��[�H]K��[�\�][ۜ�؞W��Y�
+�[�˜�]\�OOH	���TUI�H�]\���[���[�\�]Y�[XY�\��NY�
+�[�˜�]\�OOH	ѐRSQ	�H����]�\��܊	�[ۘ\�Έ�[�\�Y\�[���Z�\��Y�[��NB�����]�\��܊	�[Y[�]8�$�[ۘ\��[��ܝ]�X�	�NB����8� 8� 8� �ST�H8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�]�[\�J
+H�ۜ��H��[Y[���][[Y[��RY
+	��[\�I�N�ۜ�[\HH˜]Y\�T�[X�܊	˙[\I�NY�
+[\JH[\K��[[ݙJ
+N�]\���B���[��[ۈY�Y\�YX�[
+H�ۜ�]�H��[Y[��ܙX]Q[[Y[�
+	�]��N]���\�Ә[YHH	��Y\���]��YHY]��[��\�SH]��\��H��[��\����]��]��\��H��Y\�]^���X�[O�]���]�[\�J
+K��\[�
+]�NB���[��[ۈ�[[ݙS�Y\�Y
+H�ۜ�[H��[Y[���][[Y[��RY
+Y
+NY�
+[
+H[��[[ݙJ
+NB���[��[ۈY[XY�P�\�
+\��[[�[YKX�[�\��Y
+H�ۜ��Y�U\�H\���\X�J�����	ȊN�ۜ��Y�Q�[[�[YHH�[[�[YK��\X�J�����	ȊN�ۜ��Y�SX�[HX�[��\X�J�����	ȊN��ۜ��\���[ۜ�H[�\��\˛X\
+�O��]��\��H����[Y[�KZ][H�ۘ�X��H��]�Y�	��˚YI�	���Y�U\�I�	���Y�SX�[I�N����S���Y[�\�
+H���	�˚X�۟H	�˛�[Y_B��]���
+K���[�	��N��ۜ��\�H��[Y[��ܙX]Q[[Y[�
+	�]��N�\���\�Ә[YHH	�[Y�X�\�	��\��[��\�SH�[Y�ܘ�H��\�H�[H�ٚ[[�[Y_H��Y[��H�^�H�ۘ�X��H��[�Y���
+	���Y�U\�I�H���]��\��H�[Y�XX�[ۜȏ���[��\��H�[Y�[X�[���X�[O��[����]ۈ�\��H�X�ۋX���]OH��ۛ�Y�ۘ�X��H�[Y�	���Y�U\�I�	���Y�Q�[[�[Y_I�H���!�؝]ۏ��]��\��H����Y���ۈ����]ۈ�\��H����X���ۘ�X��H����S���Y[�J\�H��'�$�؝]ۏ��]��\��H����[Y[�H���]��[OH�Y[�΍�Mٛ۝\�^�N��ܙ[N���܎��\�K[]]Y
+N؛ܙ\�X���N�\��Y�\�KX�ܙ\�H��[��Y�\�[�������]���	��\���[ۜ�B��]����]����]���]�[\�J
+K��\[�
+�\�
+NB���[��[ۈ���S���Y[�J��H�ۜ�Y[�HH����^[[Y[��X�[���ۜ��\��[�HY[�K��\��\���۝Z[��	��[��N���S���Y[�\�
+NY�
+]�\��[�HY[�K��\��\��Y
+	��[��NB���[��[ۈ���S���Y[�\�
+H��[Y[��]Y\�T�[X�ܐ[
+	˛���[Y[�K��[��K��ܑXX�
+HO�K��\��\���[[ݙJ	��[��JNB����[Y[��Y]�[�\�[�\�	��X���HO�Y�
+YK�\��]����\�
+	˛���Y���ۉ�JH���S���Y[�\�
+NJN��[��[ۈ\]Q�[��[��
+H��[Y[���][[Y[��RY
+	��[��[�	�K�^�۝[�H�[\�P��[���[Y[���][[Y[��RY
+	��[��[��Y��K�^�۝[�H�[\�P��[�B����8� 8� 8� Q���8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ�[�Y���
+\�
+H��[Y[���][[Y[��RY
+	�Y���[Y��K�ܘ�H\���[Y[���][[Y[��RY
+	�Y���	�K��\��\��Y
+	�����NB��[��[ۈ���SY���
 
-  const cls = allClasses.find(c => c.id === selectedClassId);
-  const loaderIds = [];
-  switchTab('gallery');
-  for (let i = 0; i < count; i++) {
-    const id = `gen-${Date.now()}-${i}`;
-    addLoader(id, `${cls ? cls.name : 'Asset'} #${i + 1}`);
-    loaderIds.push(id);
-  }
+H���[Y[���][[Y[��RY
+	�Y���	�K��\��\���[[ݙJ	�����N�B���[Y[��Y]�[�\�[�\�	��^Y�ۉ�HO��Y�
+K��^HOOH	�\��\I�H���SY���
 
-  let initImageId = null;
-  if (useRef && ref) {
-    try {
-      btn.textContent = 'â¬ï¸ Referenz wird geladen...';
-      status.textContent = 'Stil-Referenz wird zu Leonardo hochgeladen...';
-      fill.style.width = '18%';
-      initImageId = await uploadImageFromUrl(ref.url, apiKey);
-      fill.style.width = '28%';
-      status.textContent = 'Referenz hochgeladen â';
-    } catch(e) {
-      status.textContent = '';
-      notify(`Referenz-Upload fehlgeschlagen (${e.message}) â generiere ohne Referenz`, 'warn');
-    }
-  }
+N�JN���8� 8� 8� �ӓ�Q8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� �\�[���[��[ۈ[Y�\��[[�[YJH�H�ۜ��\�H]�Z]�]�
+\�
+N�ۜ��؈H]�Z]�\˘�؊
+N�ۜ�HH��[Y[��ܙX]Q[[Y[�
+	�I�NK��Y�HT��ܙX]Sؚ�X�T�
+�؊NK��ۛ�YH�[[�[YNK��X��
+N��Y�J�ٚ[[�[Y_H��\�ZX�\�	����NH�]���[��˛�[�\�	�؛[���N�B�B���[��[ۈ�ۛ�Y[
 
-  btn.textContent = 'â³ Generiere...';
-  status.textContent = 'Generation lÃ¤uft...';
-  fill.style.width = '35%';
+H�ۜ�[Y��H��[Y[��]Y\�T�[X�ܐ[
+	˚[Y�X�\�[Y��NY�
+Z[Y�˛[��
+H���Y�J	��Z[�H�[\��	�\���N��]\���B�[Y�˙�ܑXX�
 
-  try {
-    const body = {
-      prompt: fullPrompt,
-      negative_prompt: NEG,
-      modelId: selectedModelId,
-      width: w,
-      height: h,
-      num_images: count,
-      public: false,
-    };
-    if (initImageId) {
-      body.init_image_id = initImageId;
-      body.init_strength = parseFloat(document.getElementById('refStrength').value);
-    }
+[Y�JHO��][Y[�]
 
-    const res = await fetch(`${API}/generations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
-    }
-    const data = await res.json();
-    const genId = data.sdGenerationJob?.generationId;
-    if (!genId) throw new Error('Keine Generation-ID erhalten');
 
-    fill.style.width = '50%';
-    status.textContent = 'Warte auf Ergebnis...';
-    const images = await pollGeneration(genId, apiKey);
-    fill.style.width = '95%';
+HO�[Y�[Y˜ܘ�[Y˘[[��W��H
+�_K���
+KH
+�
+�
+JNB���[��[ۈ�X\��[\�J
+HY�
+X�ۙ�\�J	��[\�YHY\�[��
+�[T�Y�\�[��[��ZX�[�\�[[�I�JH�]\����[Y[���][[Y[��RY
+	��[\�I�K�[��\�SH	�]��\��H�[\H��]��\��H�X�ۈ������]�������Z[�H\��]��[�\�Y\����]����[\�P��[�H\]Q�[��[��
+NB����8� 8� 8� P��8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ��]�X��[YJH�ۜ��[Y\�H���\��\��	��[�\�]I�	��[\�I�N��[Y[��]Y\�T�[X�ܐ[
+	˝X��K��ܑXX�
 
-    loaderIds.forEach(id => removeLoader(id));
-    images.forEach((img, i) => {
-      galleryCount++;
-      const label = `${cls ? cls.name : 'Asset'} #${galleryCount}`;
-      const filename = `hanse_${selectedClassId}_${Date.now()}_${i + 1}.png`;
-      addImageCard(img.url, filename, label, selectedClassId);
-    });
-    updateGalCounts();
-    fill.style.width = '100%';
-    status.textContent = '';
-    setTimeout(() => { progress.classList.remove('show'); fill.style.width = '0%'; }, 800);
-    notify(`${images.length} ${cls ? cls.name : 'Assets'} generiert â`, 'ok');
+JHO���\��\�����J	�X�]�I��[Y\��WHOOH�[YJJN��[Y[��]Y\�T�[X�ܐ[
+	˝X�X�۝[�	�K��ܑXX�
+�O�˘�\��\�����J	�X�]�I�˚YOOHX�Iۘ[Y_X
+JNB����8� 8� 8� ��Q�H8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� 8� ��[��[ۈ��Y�J\��\HH	����H�ۜ��H��[Y[���][[Y[��RY
+	ۛ�Y��N��^�۝[�H\�����\�Ә[YHH��Y�	�\_H����X\�[Y[�]
+���
+N���H�][Y[�]
 
-  } catch(e) {
-    loaderIds.forEach(id => removeLoader(id));
-    status.textContent = '';
-    notify(`Fehler: ${e.message}`, 'err');
-    progress.classList.remove('show');
-    fill.style.width = '0%';
-  }
 
-  btn.disabled = false;
-  btn.textContent = 'â¡ Generieren';
-}
+HO����\��\���[[ݙJ	�����K�L
+NB��[�]
 
-// âââ POLLING âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-async function pollGeneration(genId, apiKey, maxAttempts = 40) {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 2500));
-    const res = await fetch(`${API}/generations/${genId}`, {
-      headers: { 'authorization': `Bearer ${apiKey}` }
-    });
-    const data = await res.json();
-    const gen = data.generations_by_pk;
-    if (gen?.status === 'COMPLETE') return gen.generated_images || [];
-    if (gen?.status === 'FAILED') throw new Error('Leonardo: Generierung fehlgeschlagen');
-  }
-  throw new Error('Timeout â Leonardo antwortet nicht');
-}
-
-// âââ GALLERY âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function getGallery() {
-  const g = document.getElementById('gallery');
-  const empty = g.querySelector('.empty');
-  if (empty) empty.remove();
-  return g;
-}
-
-function addLoader(id, label) {
-  const div = document.createElement('div');
-  div.className = 'loader'; div.id = id;
-  div.innerHTML = `<div class="spinner"></div><div class="loader-text">${label}</div>`;
-  getGallery().prepend(div);
-}
-
-function removeLoader(id) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
-}
-
-function addImageCard(url, filename, label, classId) {
-  const safeUrl = url.replace(/'/g, "\\'");
-  const safeFilename = filename.replace(/'/g, "\\'");
-  const safeLabel = label.replace(/'/g, "\\'");
-
-  const classOptions = allClasses.map(c =>
-    `<div class="lock-menu-item" onclick="setRef('${c.id}','${safeUrl}','${safeLabel}');closeLockMenus()">
-       ${c.icon} ${c.name}
-     </div>`
-  ).join('');
-
-  const card = document.createElement('div');
-  card.className = 'img-card';
-  card.innerHTML = `
-    <img src="${url}" alt="${filename}" loading="lazy" onclick="openLightbox('${safeUrl}')">
-    <div class="img-actions">
-      <span class="img-label">${label}</span>
-      <button class="icon-btn" title="Download" onclick="dlImg('${safeUrl}','${safeFilename}')">â¬</button>
-      <div class="lock-dropdown">
-        <button class="lock-btn" onclick="toggleLockMenu(this)">ð</button>
-        <div class="lock-menu">
-          <div style="padding:6px 14px;font-size:0.7rem;color:var(--muted);border-bottom:1px solid var(--border)">Als Referenz fÃ¼r:</div>
-          ${classOptions}
-        </div>
-      </div>
-    </div>`;
-  getGallery().prepend(card);
-}
-
-function toggleLockMenu(btn) {
-  const menu = btn.nextElementSibling;
-  const wasOpen = menu.classList.contains('open');
-  closeLockMenus();
-  if (!wasOpen) menu.classList.add('open');
-}
-
-function closeLockMenus() {
-  document.querySelectorAll('.lock-menu.open').forEach(m => m.classList.remove('open'));
-}
-
-document.addEventListener('click', e => {
-  if (!e.target.closest('.lock-dropdown')) closeLockMenus();
-});
-
-function updateGalCounts() {
-  document.getElementById('galCount').textContent = galleryCount;
-  document.getElementById('galCountBig').textContent = galleryCount;
-}
-
-// âââ LIGHTBOX ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function openLightbox(url) {
-  document.getElementById('lightboxImg').src = url;
-  document.getElementById('lightbox').classList.add('show');
-}
-function closeLightbox() { document.getElementById('lightbox').classList.remove('show'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-
-// âââ DOWNLOAD ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-async function dlImg(url, filename) {
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    notify(`"${filename}" gespeichert`, 'ok');
-  } catch { window.open(url, '_blank'); }
-}
-
-function downloadAll() {
-  const imgs = document.querySelectorAll('.img-card img');
-  if (!imgs.length) { notify('Keine Bilder', 'err'); return; }
-  imgs.forEach((img, i) => setTimeout(() => dlImg(img.src, img.alt || `hanse_${i + 1}.png`), i * 700));
-}
-
-function clearGallery() {
-  if (!confirm('Galerie leeren? (Stil-Referenzen bleiben erhalten)')) return;
-  document.getElementById('gallery').innerHTML = '<div class="empty"><div class="icon">â</div><p>Noch keine Assets generiert</p></div>';
-  galleryCount = 0;
-  updateGalCounts();
-}
-
-// âââ TABS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function switchTab(name) {
-  const names = ['classes', 'generate', 'gallery'];
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
-}
-
-// âââ NOTIFY âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function notify(msg, type = 'ok') {
-  const n = document.getElementById('notif');
-  n.textContent = msg;
-  n.className = `notif ${type} show`;
-  clearTimeout(n._t);
-  n._t = setTimeout(() => n.classList.remove('show'), 3500);
-}
-
-init();
-</script>
-</body>
-</html>
+N��ܚ\��؛�O���[�
